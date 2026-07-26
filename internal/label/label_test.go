@@ -43,3 +43,21 @@ func TestColor(t *testing.T) {
 		}
 	}
 }
+
+func TestParseMarker(t *testing.T) {
+	for in, want := range map[string]string{"yellow": "🟨", "BLUE": "🟦", " green ": "🟩", "🟪": "🟪", "⚡": "⚡"} {
+		got, err := ParseMarker(in)
+		if err != nil {
+			t.Errorf("ParseMarker(%q): %v", in, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("ParseMarker(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for _, in := range []string{"", "chartreuse", "#f7f3de", "🟨 with text"} {
+		if got, err := ParseMarker(in); err == nil {
+			t.Errorf("ParseMarker(%q) = %q, want an error", in, got)
+		}
+	}
+}

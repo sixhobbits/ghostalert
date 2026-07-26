@@ -2,6 +2,8 @@
 package label
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -78,4 +80,23 @@ func isMarker(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// ParseMarker turns a colour name, or an emoji pasted straight in, into the marker
+// to put at the front of a tab title.
+func ParseMarker(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if r, ok := Names[strings.ToLower(s)]; ok {
+		return string(r), nil
+	}
+	if m := Marker(s); m != "" && m == s {
+		return s, nil
+	}
+	names := make([]string, 0, len(Names))
+	for n := range Names {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return "", fmt.Errorf("%q is not a colour: use one of %s, or paste an emoji",
+		s, strings.Join(names, ", "))
 }

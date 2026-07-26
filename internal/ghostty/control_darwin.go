@@ -293,6 +293,13 @@ func Focus(pid int, tabTitle string, tabIndex int) (string, error) {
 	if tabTitle == "" && tabIndex <= 0 {
 		return "", errors.New("nothing to focus: no tab title and no tab index")
 	}
+	// Ghostty's own scripting interface is cleaner than clicking a radio button
+	// in the accessibility tree, so try it first. It cannot see every instance,
+	// which is what the accessibility path below is still for.
+	if ok, err := SelectTab(tabTitle); err == nil && ok {
+		return "tab-title", nil
+	}
+
 	pidArg := ""
 	if pid > 0 {
 		pidArg = strconv.Itoa(pid)

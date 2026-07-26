@@ -101,9 +101,20 @@ brown, black, white, pink and cyan. Only a marker at the *start* of the title
 counts, so an emoji inside a sentence stays text. Change the marker in Ghostty
 and the tile follows on the next refresh.
 
+Markers can be written from here rather than through Ghostty's title prompt:
+
+```sh
+ghostalert mark RITZA green    # tab becomes "🟩 RITZA", tile turns green
+ghostalert mark 3 🟨           # or paste the emoji
+```
+
+Ghostty treats a title set this way as an override, so nothing running in the
+tab can paint over it. This goes through Ghostty's scripting interface, which
+only answers for one instance — see below.
+
 Tabs with no marker get a palette colour from
 `~/.config/ghostalert/config.json`, chosen to avoid one a marked tab already
-uses. To override one without touching the tab title:
+uses. To colour a tile without touching the tab title:
 
 ```sh
 ghostalert color SPEAKEASY yellow    # yellow blue red purple orange green
@@ -185,17 +196,27 @@ or the phone wakes.
 
 ## How a tap finds the right tab
 
-Ghostty publishes its tab bar to the macOS accessibility API as a group of radio
-buttons, one per tab, each named after the tab. Focusing means raising the window
-and clicking one — better than sending ⌘1…⌘9, which cannot reach a tenth tab and
-depends on which window is frontmost.
+Ghostty ships an AppleScript dictionary — windows, tabs, terminals, `select
+tab`, and `perform action` for any Ghostty action string. That is the first
+thing tried: it needs no permission, names tabs by id, and is how `mark` sets a
+title.
+
+It cannot see everything, though. Apple events are addressed to a bundle
+identifier, so when several Ghostty processes are running — a hotkey window
+started with its own `--config-file` is one — only the instance the system has
+registered answers, and it does not follow which one is frontmost. So the
+fallback is the accessibility API, where Ghostty publishes its tab bar as a
+group of radio buttons, one per tab, each named after the tab. Clicking one
+switches tab, and unlike ⌘1…⌘9 it reaches a tenth tab and does not care which
+window is frontmost.
 
 Two details this has to get right:
 
-- **More than one Ghostty can be running.** A hotkey window launched with its own
-  `--config-file` is a separate process, and `tell process "Ghostty"` only ever
-  reaches one of them. Every lookup here walks all of them, and tiles remember
-  which instance their tab came from.
+- **More than one Ghostty can be running.** Every accessibility lookup walks all
+  processes named Ghostty, and tiles remember which instance their tab came
+  from. `tell process "Ghostty"` reaches only one, and holding onto element
+  references across processes silently returns the wrong process's answers, so
+  each pass re-runs the query and works on the loop variable.
 - **Tab titles you set by hand are permanent.** Ghostty's "change title" prompt
   makes a tab ignore the escape sequences programs use to rename it, so a tab
   cannot be identified by writing a marker to its terminal and reading the tab

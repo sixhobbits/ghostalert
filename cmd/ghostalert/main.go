@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -45,6 +46,7 @@ Usage:
                                          that are still open (alias: adopt)
   ghostalert focus <slot|name>           raise a tab on this machine
   ghostalert color <slot|name> <colour>  override a tile colour (name or #hex)
+  ghostalert mark <slot|name> <colour>   put a colour emoji in the tab's title
   ghostalert grid <cols> <rows>          resize the phone grid
   ghostalert clear [<slot>|--all]        remove tiles
   ghostalert doctor                      check the setup
@@ -76,6 +78,8 @@ func main() {
 		err = cmdFocus(args)
 	case "color", "colour":
 		err = cmdColor(args)
+	case "mark":
+		err = cmdMark(args)
 	case "status":
 		err = cmdStatus(args)
 	case "url":
@@ -384,26 +388,15 @@ func cmdColor(args []string) error {
 		return err
 	}
 
-	req := map[string]any{"color": hex}
-	if slot, convErr := strconv.Atoi(fs.Arg(0)); convErr == nil {
-		req["slot"] = slot
-	} else {
-		var snap state.Snapshot
-		if err := c.Get("/api/state", &snap); err != nil {
-			return err
-		}
-		found := 0
-		for _, t := range snap.Tiles {
-			if strings.EqualFold(t.Name, fs.Arg(0)) || strings.EqualFold(label.Text(t.Name), fs.Arg(0)) {
-				found = t.Slot
-				break
-			}
-		}
-		if found == 0 {
-			return fmt.Errorf("no tile named %q", fs.Arg(0))
-		}
-		req["slot"] = found
+	var snap state.Snapshot
+	if err := c.Get("/api/state", &snap); err != nil {
+		return err
 	}
+	target, err := findTile(snap, fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	req := map[string]any{"slot": target.Slot, "color": hex}
 
 	var tile state.Tile
 	if err := c.Post("/api/tile", req, &tile); err != nil {
@@ -411,6 +404,81 @@ func cmdColor(args []string) error {
 	}
 	fmt.Printf("slot %d  %s  %s\n", tile.Slot, tile.Color, tile.Name)
 	return nil
+}
+
+// cmdMark writes a colour marker into the Ghostty tab's own title, which is
+// where tile colours come from. Ghostty's scripting interface sets the title as
+// an override, so nothing running in the tab can paint over it.
+func cmdMark(args []string) error {
+	fs := flag.NewFlagSet("mark", flag.ExitOnError)
+	var cf clientFlags
+	cf.bind(fs)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 2 {
+		names := make([]string, 0, len(label.Names))
+		for n := range label.Names {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		return fmt.Errorf("usage: ghostalert mark <slot|name> <colour>\ncolours: %s, or paste an emoji",
+			strings.Join(names, " "))
+	}
+	marker, err := label.ParseMarker(fs.Arg(1))
+	if err != nil {
+		return err
+	}
+
+	c, err := cf.build()
+	if err != nil {
+		return err
+	}
+	var snap state.Snapshot
+	if err := c.Get("/api/state", &snap); err != nil {
+		return err
+	}
+	tile, err := findTile(snap, fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	if tile.TabTitle == "" {
+		return fmt.Errorf("slot %d is not tied to a tab; run `ghostalert refresh` first", tile.Slot)
+	}
+
+	newTitle := marker + " " + label.Text(tile.TabTitle)
+	if err := ghostty.SetTabTitle(tile.TabTitle, newTitle); err != nil {
+		return err
+	}
+
+	req := map[string]any{"slot": tile.Slot, "tabTitle": newTitle}
+	if tile.Name == tile.TabTitle {
+		req["name"] = newTitle
+	}
+	var updated state.Tile
+	if err := c.Post("/api/tile", req, &updated); err != nil {
+		return err
+	}
+	fmt.Printf("slot %d  %s  %s\n", updated.Slot, updated.Color, updated.Name)
+	return nil
+}
+
+// findTile resolves a slot number or a tile name, with or without its marker.
+func findTile(snap state.Snapshot, want string) (state.Tile, error) {
+	if slot, err := strconv.Atoi(want); err == nil {
+		for _, t := range snap.Tiles {
+			if t.Slot == slot {
+				return t, nil
+			}
+		}
+		return state.Tile{}, fmt.Errorf("slot %d is empty", slot)
+	}
+	for _, t := range snap.Tiles {
+		if strings.EqualFold(t.Name, want) || strings.EqualFold(label.Text(t.Name), want) {
+			return t, nil
+		}
+	}
+	return state.Tile{}, fmt.Errorf("no tile named %q", want)
 }
 
 func cmdStatus(args []string) error {
