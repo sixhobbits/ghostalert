@@ -74,84 +74,107 @@ tell application "System Events"
 end tell
 `
 
+// Every sweep re-runs "every process whose name is Ghostty" and works on the
+// loop variable directly. Stashing those process objects in a list first breaks
+// them: reads against the second instance start failing or, worse, answer for
+// the first one.
 const focusScript = `
-on raiseIt(p, w)
+on sweep(wantPid, tname, idx)
 	tell application "System Events"
-		try
-			set frontmost of p to true
-		end try
-		try
-			perform action "AXRaise" of w
-		end try
-	end tell
-end raiseIt
-
-on run argv
-	set wantPid to item 1 of argv
-	set tname to item 2 of argv
-	set idx to (item 3 of argv) as integer
-	tell application "System Events"
-		set procs to (every process whose name is "Ghostty")
-		if (count of procs) is 0 then return "no-process"
-
-		-- Try the process that owned this tab last, then any other instance.
-		set ordered to {}
-		if wantPid is not "" then
-			repeat with p in procs
+		repeat with p in (every process whose name is "Ghostty")
+			set okProc to true
+			if wantPid is not "" then
+				set okProc to false
 				try
-					if ((unix id of p) as text) is wantPid then set end of ordered to contents of p
+					set okProc to (((unix id of p) as text) is wantPid)
 				end try
-			end repeat
-		end if
-		repeat with p in procs
-			set end of ordered to contents of p
-		end repeat
-
-		if tname is not "" then
-			repeat with p in ordered
+			end if
+			if okProc then
 				repeat with w in windows of p
 					set ns to {}
 					try
 						set ns to name of radio buttons of tab group 1 of w
 					end try
-					repeat with i from 1 to count of ns
-						if ((item i of ns) as text) is tname then
-							my raiseIt(p, w)
+					if tname is not "" then
+						repeat with i from 1 to count of ns
+							if ((item i of ns) as text) is tname then
+								try
+									set frontmost of p to true
+								end try
+								try
+									perform action "AXRaise" of w
+								end try
+								try
+									click radio button i of tab group 1 of w
+								end try
+								return "tab-title"
+							end if
+						end repeat
+						if (count of ns) is 0 then
+							set wn to ""
 							try
-								click radio button i of tab group 1 of w
+								set wn to (name of w) as text
 							end try
-							return "tab-title"
-						end if
-					end repeat
-					if (count of ns) is 0 then
-						try
-							if ((name of w) as text) is tname then
-								my raiseIt(p, w)
+							if wn is tname then
+								try
+									set frontmost of p to true
+								end try
+								try
+									perform action "AXRaise" of w
+								end try
 								return "window-title"
 							end if
-						end try
-					end if
-				end repeat
-			end repeat
-		end if
-
-		if idx > 0 then
-			repeat with p in ordered
-				repeat with w in windows of p
-					try
-						set n to count of radio buttons of tab group 1 of w
-						if idx <= n then
-							my raiseIt(p, w)
-							click radio button idx of tab group 1 of w
+						end if
+					else if idx > 0 then
+						if idx <= (count of ns) then
+							try
+								set frontmost of p to true
+							end try
+							try
+								perform action "AXRaise" of w
+							end try
+							try
+								click radio button idx of tab group 1 of w
+							end try
 							return "tab-index"
 						end if
-					end try
+					end if
 				end repeat
-			end repeat
-		end if
-
-		return "not-found"
+			end if
+		end repeat
 	end tell
+	return ""
+end sweep
+
+on run argv
+	set wantPid to item 1 of argv
+	set tname to item 2 of argv
+	set idx to (item 3 of argv) as integer
+
+	tell application "System Events"
+		if (count of (every process whose name is "Ghostty")) is 0 then return "no-process"
+	end tell
+
+	-- Most specific first: the right title in the instance this tab belongs to,
+	-- then that title anywhere, then position, which is all that is left once a
+	-- tab has been renamed.
+	if tname is not "" then
+		if wantPid is not "" then
+			set r to my sweep(wantPid, tname, 0)
+			if r is not "" then return r
+		end if
+		set r to my sweep("", tname, 0)
+		if r is not "" then return r
+	end if
+	if idx > 0 then
+		if wantPid is not "" then
+			set r to my sweep(wantPid, "", idx)
+			if r is not "" then return r
+		end if
+		set r to my sweep("", "", idx)
+		if r is not "" then return r
+	end if
+	return "not-found"
 end run
 `
 
