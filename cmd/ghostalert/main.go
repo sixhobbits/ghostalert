@@ -45,7 +45,6 @@ Usage:
                                          keeping state and bindings for tabs
                                          that are still open (alias: adopt)
   ghostalert focus <slot|name>           raise a tab on this machine
-  ghostalert color <slot|name> <colour>  override a tile colour (name or #hex)
   ghostalert mark <slot|name> <colour>   put a colour emoji in the tab's title
   ghostalert grid <cols> <rows>          resize the phone grid
   ghostalert clear [<slot>|--all]        remove tiles
@@ -76,8 +75,6 @@ func main() {
 		err = cmdRegister(args)
 	case "focus":
 		err = cmdFocus(args)
-	case "color", "colour":
-		err = cmdColor(args)
 	case "mark":
 		err = cmdMark(args)
 	case "status":
@@ -200,7 +197,6 @@ func cmdSet(args []string) error {
 	cf.bind(fs)
 	slot := fs.Int("slot", 0, "tile slot (default: the current tab's tile)")
 	name := fs.String("name", "", "tile name")
-	color := fs.String("color", "", "tile colour: a name like blue, or #dee7f7")
 	tty := fs.String("tty", "", "terminal device (default: detected)")
 	bind := fs.Bool("bind", false, "also claim this tab's tile, as `register` does")
 	if err := fs.Parse(args); err != nil {
@@ -226,13 +222,6 @@ func cmdSet(args []string) error {
 	}
 	if *name != "" {
 		req["name"] = *name
-	}
-	if *color != "" {
-		hex, err := config.ResolveColor(*color)
-		if err != nil {
-			return err
-		}
-		req["color"] = hex
 	}
 	t := pickTTY(*tty)
 	if t != "" {
@@ -262,7 +251,6 @@ func cmdRegister(args []string) error {
 	cf.bind(fs)
 	slot := fs.Int("slot", 0, "tile slot (default: this tab's position)")
 	name := fs.String("name", "", "tile name (default: the tab's title)")
-	color := fs.String("color", "", "tile colour: a name like blue, or #dee7f7")
 	tty := fs.String("tty", "", "terminal device (default: detected)")
 	tabTitle := fs.String("tab", "", "Ghostty tab title (default: this tab's title)")
 	if err := fs.Parse(args); err != nil {
@@ -296,13 +284,6 @@ func cmdRegister(args []string) error {
 	}
 	if *name != "" {
 		req["name"] = *name
-	}
-	if *color != "" {
-		hex, err := config.ResolveColor(*color)
-		if err != nil {
-			return err
-		}
-		req["color"] = hex
 	}
 
 	c, err := cf.build()
@@ -365,47 +346,6 @@ func cmdFocus(args []string) error {
 	return nil
 }
 
-// cmdColor overrides a tile's colour. The usual way to set one is to put a
-// coloured square in the tab title, which ghostty shows in the tab bar and
-// ghostalert reads; this is for tabs with no marker, or a different opinion.
-func cmdColor(args []string) error {
-	fs := flag.NewFlagSet("color", flag.ExitOnError)
-	var cf clientFlags
-	cf.bind(fs)
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: ghostalert color <slot|name> <colour>\n"+
-			"colours: %s, or a hex code like #f7f3de", strings.Join(config.ColorNames, " "))
-	}
-	hex, err := config.ResolveColor(fs.Arg(1))
-	if err != nil {
-		return err
-	}
-	c, err := cf.build()
-	if err != nil {
-		return err
-	}
-
-	var snap state.Snapshot
-	if err := c.Get("/api/state", &snap); err != nil {
-		return err
-	}
-	target, err := findTile(snap, fs.Arg(0))
-	if err != nil {
-		return err
-	}
-	req := map[string]any{"slot": target.Slot, "color": hex}
-
-	var tile state.Tile
-	if err := c.Post("/api/tile", req, &tile); err != nil {
-		return err
-	}
-	fmt.Printf("slot %d  %s  %s\n", tile.Slot, tile.Color, tile.Name)
-	return nil
-}
-
 // cmdMark writes a colour marker into the Ghostty tab's own title, which is
 // where tile colours come from. Ghostty's scripting interface sets the title as
 // an override, so nothing running in the tab can paint over it.
@@ -459,7 +399,7 @@ func cmdMark(args []string) error {
 	if err := c.Post("/api/tile", req, &updated); err != nil {
 		return err
 	}
-	fmt.Printf("slot %d  %s  %s\n", updated.Slot, updated.Color, updated.Name)
+	fmt.Printf("slot %d  %s\n", updated.Slot, updated.Name)
 	return nil
 }
 
@@ -502,7 +442,7 @@ func cmdStatus(args []string) error {
 			fmt.Printf("%3d  -\n", t.Slot)
 			continue
 		}
-		fmt.Printf("%3d  %-8s %-22s %-7s %s\n", t.Slot, t.Color, truncate(t.Name, 22), t.State, t.Message)
+		fmt.Printf("%3d  %-24s %-7s %s\n", t.Slot, truncate(t.Name, 24), t.State, t.Message)
 	}
 	return nil
 }
@@ -663,7 +603,7 @@ func cmdRefresh(args []string) error {
 		return err
 	}
 	for _, t := range tiles {
-		fmt.Printf("slot %d  %s  %-7s %s\n", t.Slot, t.Color, t.State, t.Name)
+		fmt.Printf("slot %d  %-7s %s\n", t.Slot, t.State, t.Name)
 	}
 	return nil
 }

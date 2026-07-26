@@ -7,7 +7,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -174,6 +172,22 @@ private fun TileGrid(snapshot: Snapshot, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * State is what a tile is for, so state is what it is coloured by: the grid
+ * reads as a status board from across the room. The tab's own colour lives in
+ * the emoji its title starts with, which shows here exactly as it does in the
+ * tab bar.
+ */
+private data class Look(val fill: Color, val ink: Color)
+
+private fun lookFor(state: String): Look = when (state) {
+    "waiting" -> Look(Color(0xFFFF9500), Color(0xFF1A1200))
+    "error" -> Look(Color(0xFFFF3B30), Color.White)
+    "working" -> Look(Color(0xFF2F6FED), Color.White)
+    "done" -> Look(Color(0xFF2AA84A), Color.White)
+    else -> Look(Color(0xFF23232B), Color(0xFFB9B9C4))
+}
+
 @Composable
 private fun TileView(tile: Tile) {
     if (tile.isEmpty) {
@@ -190,23 +204,14 @@ private fun TileView(tile: Tile) {
     }
 
     val context = LocalContext.current
-    val background = remember(tile.color) { parseColor(tile.color) }
-    val ink = if (background.luminance() > 0.45f) Color(0xFF14141A) else Color.White
-
-    val accent = when (tile.state) {
-        "waiting" -> Color(0xFFFF9500)
-        "error" -> Color(0xFFFF3B30)
-        "done" -> Color(0xFF34C759)
-        "working" -> ink.copy(alpha = 0.35f)
-        else -> Color.Transparent
-    }
+    val look = lookFor(tile.state)
 
     // Waiting is the state you are meant to notice from across the room.
     val pulse = if (tile.state == "waiting") {
         val transition = rememberInfiniteTransition(label = "pulse")
         transition.animateFloat(
             initialValue = 1f,
-            targetValue = 0.25f,
+            targetValue = 0.55f,
             animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
             label = "pulseAlpha",
         ).value
@@ -218,11 +223,8 @@ private fun TileView(tile: Tile) {
         Modifier
             .fillMaxSize()
             .clip(RoundedCornerShape(14.dp))
-            .background(background)
-            .border(3.dp, accent.copy(alpha = accent.alpha * pulse), RoundedCornerShape(14.dp))
+            .background(look.fill.copy(alpha = pulse))
             .clickable {
-                // Touching a tile is a request to the Mac, so a failure has to
-                // be visible: otherwise the tap just looks like it worked.
                 Repo.focus(tile.slot) { result ->
                     result.onFailure {
                         Toast.makeText(context, it.message ?: "focus failed", Toast.LENGTH_SHORT)
@@ -234,7 +236,7 @@ private fun TileView(tile: Tile) {
     ) {
         Text(
             tile.name,
-            color = ink,
+            color = look.ink,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp,
             maxLines = 1,
@@ -243,7 +245,7 @@ private fun TileView(tile: Tile) {
         if (tile.message.isNotBlank()) {
             Text(
                 tile.message,
-                color = ink.copy(alpha = 0.75f),
+                color = look.ink.copy(alpha = 0.8f),
                 fontSize = 13.sp,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
@@ -252,12 +254,12 @@ private fun TileView(tile: Tile) {
         Spacer(Modifier.weight(1f))
         Text(
             tile.state.uppercase(),
-            color = ink,
+            color = look.ink,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .background(ink.copy(alpha = 0.12f))
+                .background(look.ink.copy(alpha = 0.15f))
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .alpha(0.9f),
         )
@@ -339,7 +341,3 @@ private fun SettingsDialog(snapshot: Snapshot?, onClose: () -> Unit) {
         dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
     )
 }
-
-private fun parseColor(hex: String): Color = runCatching {
-    Color(android.graphics.Color.parseColor(hex.ifBlank { "#dddddd" }))
-}.getOrDefault(Color(0xFFDDDDDD))

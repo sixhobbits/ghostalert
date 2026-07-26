@@ -35,41 +35,41 @@ func TestSnapshotFillsEmptySlots(t *testing.T) {
 
 func TestApplyCreatesAndPatches(t *testing.T) {
 	s := newTestStore(t)
-	tile, err := s.Apply(3, Patch{Name: str("RITZA"), State: str(StateWaiting)}, "#abcdef")
+	tile, err := s.Apply(3, Patch{Name: str("RITZA"), State: str(StateWaiting)})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	if tile.Name != "RITZA" || tile.State != StateWaiting || tile.Color != "#abcdef" {
+	if tile.Name != "RITZA" || tile.State != StateWaiting {
 		t.Fatalf("unexpected tile %+v", tile)
 	}
 
-	// A patch that only carries a state must not wipe the name or colour.
-	tile, err = s.Apply(3, Patch{State: str(StateDone)}, "#000000")
+	// A patch that only carries a state must not wipe the name.
+	tile, err = s.Apply(3, Patch{State: str(StateDone)})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	if tile.Name != "RITZA" || tile.Color != "#abcdef" || tile.State != StateDone {
+	if tile.Name != "RITZA" || tile.State != StateDone {
 		t.Fatalf("patch overwrote fields it should not have: %+v", tile)
 	}
 }
 
 func TestApplyRejectsBadInput(t *testing.T) {
 	s := newTestStore(t)
-	if _, err := s.Apply(0, Patch{}, "#fff"); err == nil {
+	if _, err := s.Apply(0, Patch{}); err == nil {
 		t.Error("slot 0 should be rejected")
 	}
-	if _, err := s.Apply(1, Patch{State: str("banana")}, "#fff"); err == nil {
+	if _, err := s.Apply(1, Patch{State: str("banana")}); err == nil {
 		t.Error("unknown state should be rejected")
 	}
 }
 
 func TestTTYBindingIsExclusive(t *testing.T) {
 	s := newTestStore(t)
-	if _, err := s.Apply(1, Patch{TTY: str("/dev/ttys001")}, "#fff"); err != nil {
+	if _, err := s.Apply(1, Patch{TTY: str("/dev/ttys001")}); err != nil {
 		t.Fatal(err)
 	}
 	// The same shell cannot be two tabs, so rebinding must clear the old tile.
-	if _, err := s.Apply(2, Patch{TTY: str("/dev/ttys001")}, "#fff"); err != nil {
+	if _, err := s.Apply(2, Patch{TTY: str("/dev/ttys001")}); err != nil {
 		t.Fatal(err)
 	}
 	if tile, _ := s.Get(1); tile.TTY != "" {
@@ -86,14 +86,14 @@ func TestFreeSlot(t *testing.T) {
 	if got := s.FreeSlot(4); got != 4 {
 		t.Errorf("free preferred slot: got %d want 4", got)
 	}
-	if _, err := s.Apply(4, Patch{}, "#fff"); err != nil {
+	if _, err := s.Apply(4, Patch{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := s.FreeSlot(4); got != 1 {
 		t.Errorf("taken preferred slot should fall back to the lowest free one, got %d", got)
 	}
 	for i := 1; i <= 10; i++ {
-		if _, err := s.Apply(i, Patch{}, "#fff"); err != nil {
+		if _, err := s.Apply(i, Patch{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -104,7 +104,7 @@ func TestFreeSlot(t *testing.T) {
 
 func TestFindByTabTitleAndName(t *testing.T) {
 	s := newTestStore(t)
-	if _, err := s.Apply(2, Patch{Name: str("Bryntum"), TabTitle: str("BRYNTUM")}, "#fff"); err != nil {
+	if _, err := s.Apply(2, Patch{Name: str("Bryntum"), TabTitle: str("BRYNTUM")}); err != nil {
 		t.Fatal(err)
 	}
 	if tile, ok := s.FindByTabTitle("BRYNTUM"); !ok || tile.Slot != 2 {
@@ -120,7 +120,7 @@ func TestFindByTabTitleAndName(t *testing.T) {
 
 func TestTilesOutsideGridSurviveResize(t *testing.T) {
 	s := newTestStore(t)
-	if _, err := s.Apply(12, Patch{Name: str("twelve")}, "#fff"); err != nil {
+	if _, err := s.Apply(12, Patch{Name: str("twelve")}); err != nil {
 		t.Fatal(err)
 	}
 	snap := s.Snapshot()
@@ -143,11 +143,11 @@ func TestPersistenceRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Apply(1, Patch{Name: str("A"), TabIndex: num(3), PID: num(42)}, "#fff"); err != nil {
+	if _, err := s.Apply(1, Patch{Name: str("A"), TabIndex: num(3), PID: num(42)}); err != nil {
 		t.Fatal(err)
 	}
 	s.SetGrid(3, 4)
-	if _, err := s.Apply(1, Patch{State: str(StateWorking)}, "#fff"); err != nil {
+	if _, err := s.Apply(1, Patch{State: str(StateWorking)}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -170,7 +170,7 @@ func TestSubscribeReceivesUpdates(t *testing.T) {
 	ch, cancel := s.Subscribe()
 	defer cancel()
 
-	if _, err := s.Apply(1, Patch{State: str(StateWaiting)}, "#fff"); err != nil {
+	if _, err := s.Apply(1, Patch{State: str(StateWaiting)}); err != nil {
 		t.Fatal(err)
 	}
 	snap := <-ch
@@ -180,7 +180,7 @@ func TestSubscribeReceivesUpdates(t *testing.T) {
 
 	cancel()
 	// A cancelled subscription must not be published to again.
-	if _, err := s.Apply(1, Patch{State: str(StateDone)}, "#fff"); err != nil {
+	if _, err := s.Apply(1, Patch{State: str(StateDone)}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -192,7 +192,7 @@ func TestRevisionSurvivesARestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 3; i++ {
-		if _, err := s.Apply(1, Patch{Name: str("A")}, "#fff"); err != nil {
+		if _, err := s.Apply(1, Patch{Name: str("A")}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -14,11 +14,11 @@ a tab bar.
 ┌──────────────┬──────────────┐
 │ 🟨 PROJECT1  │ 🟦 BRYNTUM   │
 │ tests green  │ needs approv │
-│ DONE         │ WAITING ◀────┼── pulses orange, buzzes the phone
+│ DONE (green) │ WAITING ◀────┼── amber, pulsing, buzzes the phone
 ├──────────────┼──────────────┤
 │ 🟩 SPEAKEASY │ 🟪 RITZA     │
 │ building     │              │
-│ WORKING      │ IDLE         │
+│ WORKING(blue)│ IDLE (grey)  │
 └──────────────┴──────────────┘
 ```
 
@@ -83,45 +83,24 @@ point on.
 
 ## Colours
 
-Ghostty has no per-tab colour setting, and will not tell anyone what colour a
-tab is: it is absent from the accessibility tree and from disk, and reading the
-pixels needs Screen Recording permission.
+Tiles are coloured by state, not by tab: grey idle, blue working, amber
+waiting, green done, red error. The grid reads as a status board from across
+the room, which is the only thing worth colouring for.
 
-The usual workaround is to put a coloured square in the tab title, which shows
-up in the tab bar. ghostalert reads it:
+A tab's own colour goes in its title as an emoji, since Ghostty has no per-tab
+colour setting and will not tell anyone what colour a tab is. The tile shows
+the title verbatim, so the marker appears there exactly as it does in the tab
+bar:
 
 ```
-🟨 PROJECT1     ->  a yellow tile named "🟨 PROJECT1"
-🟦 BRYNTUM      ->  a blue tile
-🟩🟩⚡ deploy   ->  green; the first recognised marker wins
+🟨 SPEAKEASY      🟦 BRYNTUM      🟩 KA
 ```
 
-Squares and circles both work, in red, orange, yellow, green, blue, purple,
-brown, black, white, pink and cyan. Only a marker at the *start* of the title
-counts, so an emoji inside a sentence stays text. Change the marker in Ghostty
-and the tile follows on the next refresh.
+`ghostalert mark RITZA red` writes the marker for you, through Ghostty's
+scripting interface. That only answers for one instance, and no other route is
+safe: renaming through the menu means taking over the keyboard, which is not
+something a background tool should do while you are working.
 
-Markers can be written from here rather than through Ghostty's title prompt:
-
-```sh
-ghostalert mark RITZA green    # tab becomes "🟩 RITZA", tile turns green
-ghostalert mark 3 🟨           # or paste the emoji
-```
-
-Ghostty treats a title set this way as an override, so nothing running in the
-tab can paint over it. It uses Ghostty's scripting interface where that reaches
-the tab, and drives the menu otherwise — see below.
-
-Tabs with no marker get a palette colour from
-`~/.config/ghostalert/config.json`, chosen to avoid one a marked tab already
-uses. To colour a tile without touching the tab title:
-
-```sh
-ghostalert color SPEAKEASY yellow    # yellow blue red purple orange green
-ghostalert color 3 '#f7f3de'         # white black pink cyan, or any hex
-```
-
-An explicit colour outranks the marker and sticks across refreshes.
 
 To let a tab push its own status, run this **in that tab**:
 

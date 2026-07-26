@@ -52,15 +52,20 @@
     flex-direction: column;
     gap: 4px;
     overflow: hidden;
-    color: #14141a;
-    border: 2px solid transparent;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     text-align: left;
     font: inherit;
   }
   .tile:active { transform: scale(0.98); }
+  /* State is what a tile is for, so state is what it is coloured by. A tab's
+     own colour lives in the emoji its title starts with. */
   .tile.empty { background: #1a1a20; color: #4a4a56; border-style: dashed; border-color: #2a2a34; cursor: default; }
+  .tile.idle { background: #23232b; color: #b9b9c4; }
+  .tile.working { background: #2f6fed; color: #fff; }
+  .tile.waiting { background: #ff9500; color: #1a1200; animation: pulse 1.1s ease-in-out infinite; }
+  .tile.done { background: #2aa84a; color: #fff; }
+  .tile.error { background: #ff3b30; color: #fff; }
   .tile .name { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tile .msg { font-size: 13px; opacity: .8; overflow: hidden; }
   .tile .badge {
@@ -72,13 +77,9 @@
     font-weight: 700;
     padding: 2px 8px;
     border-radius: 999px;
-    background: rgba(0,0,0,.13);
+    background: rgba(255,255,255,.16);
   }
-  .tile.waiting { border-color: #ff9500; animation: pulse 1.1s ease-in-out infinite; }
-  .tile.error { border-color: #ff3b30; }
-  .tile.working { border-color: rgba(0,0,0,.25); }
-  .tile.done { border-color: #34c759; }
-  @keyframes pulse { 50% { border-color: rgba(255,149,0,.25); } }
+  @keyframes pulse { 50% { opacity: .6; } }
   #setup { display: none; flex-direction: column; gap: 8px; max-width: 420px; }
   input { padding: 10px; border-radius: 8px; border: 1px solid #333; background: #17171d; color: var(--fg); font: inherit; }
   button.go { padding: 10px; border-radius: 8px; border: 0; background: #3b7; color: #04120a; font-weight: 700; }
@@ -150,7 +151,6 @@
         grid.appendChild(el);
         return;
       }
-      el.style.background = t.color || '#ddd';
       el.innerHTML =
         '<div class="name"></div><div class="msg"></div><div class="badge"></div>';
       el.querySelector('.name').textContent = t.name;

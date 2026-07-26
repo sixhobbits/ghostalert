@@ -6,7 +6,6 @@ import org.json.JSONObject
 data class Tile(
     val slot: Int,
     val name: String,
-    val color: String,
     val state: String,
     val message: String,
 ) {
@@ -35,7 +34,6 @@ data class Snapshot(
                         Tile(
                             slot = t.optInt("slot"),
                             name = t.optString("name"),
-                            color = t.optString("color"),
                             state = t.optString("state", "empty"),
                             message = t.optString("message"),
                         )

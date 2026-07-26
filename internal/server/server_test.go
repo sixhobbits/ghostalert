@@ -21,13 +21,7 @@ const token = "testtoken"
 
 func newTestServer(t *testing.T) (http.Handler, *state.Store) {
 	t.Helper()
-	cfg := &config.Config{
-		Addr:    ":0",
-		Token:   token,
-		Cols:    2,
-		Rows:    5,
-		Palette: config.DefaultPalette,
-	}
+	cfg := &config.Config{Addr: ":0", Token: token, Cols: 2, Rows: 5}
 	store, err := state.New(filepath.Join(t.TempDir(), "state.json"), "testhost", 2, 5)
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +82,7 @@ func TestTileBySlotThenByTTY(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &tile); err != nil {
 		t.Fatal(err)
 	}
-	if tile.Slot != 2 || tile.Color != config.DefaultPalette[1] {
+	if tile.Slot != 2 {
 		t.Fatalf("unexpected tile %+v", tile)
 	}
 
@@ -193,7 +187,7 @@ func TestEventsStreamsSnapshots(t *testing.T) {
 	}
 
 	name := "SPEAKEASY"
-	if _, err := store.Apply(1, state.Patch{Name: &name}, "#fff"); err != nil {
+	if _, err := store.Apply(1, state.Patch{Name: &name}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -210,7 +204,7 @@ func TestEventsStreamsSnapshots(t *testing.T) {
 // handler would need a live Ghostty.
 func rebuildFor(t *testing.T, store *state.Store, tabs []string, pid int) []state.Tile {
 	t.Helper()
-	cfg := &config.Config{Token: token, Cols: 2, Rows: 6, Palette: config.DefaultPalette}
+	cfg := &config.Config{Token: token, Cols: 2, Rows: 6}
 	s := &Server{cfg: cfg, store: store, log: log.New(io.Discard, "", 0)}
 	return s.rebuild(ghostty.Window{PID: pid, Title: "MAIN", Tabs: tabs}, 1)
 }
@@ -221,7 +215,7 @@ func TestRefreshKeepsOpenTabsAndDropsClosedOnes(t *testing.T) {
 
 	// Give the middle tab some state and a bound shell.
 	waiting, msg, tty := state.StateWaiting, "approve?", "/dev/ttys009"
-	if _, err := store.Apply(2, state.Patch{State: &waiting, Message: &msg, TTY: &tty}, "#fff"); err != nil {
+	if _, err := store.Apply(2, state.Patch{State: &waiting, Message: &msg, TTY: &tty}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -245,7 +239,7 @@ func TestRefreshFollowsARename(t *testing.T) {
 	_, store := newTestServer(t)
 	rebuildFor(t, store, []string{"UNSILOED", "BRYNTUM"}, 42)
 	tty := "/dev/ttys009"
-	if _, err := store.Apply(2, state.Patch{TTY: &tty}, "#fff"); err != nil {
+	if _, err := store.Apply(2, state.Patch{TTY: &tty}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -262,59 +256,11 @@ func TestRefreshKeepsACustomName(t *testing.T) {
 	_, store := newTestServer(t)
 	rebuildFor(t, store, []string{"UNSILOED"}, 42)
 	custom := "CI box"
-	if _, err := store.Apply(1, state.Patch{Name: &custom}, "#fff"); err != nil {
+	if _, err := store.Apply(1, state.Patch{Name: &custom}); err != nil {
 		t.Fatal(err)
 	}
 	tiles := rebuildFor(t, store, []string{"UNSILOED"}, 42)
 	if tiles[0].Name != custom {
 		t.Errorf("a name set by hand should survive a refresh, got %q", tiles[0].Name)
-	}
-}
-
-func TestRefreshTakesColourFromTheTitleMarker(t *testing.T) {
-	_, store := newTestServer(t)
-	tiles := rebuildFor(t, store, []string{"🟨 PROJECT1", "🟦 BRYNTUM", "PLAIN"}, 42)
-
-	if tiles[0].Color != "#f7f3de" {
-		t.Errorf("a yellow marker should give a yellow tile, got %q", tiles[0].Color)
-	}
-	if tiles[1].Color != "#dee7f7" {
-		t.Errorf("a blue marker should give a blue tile, got %q", tiles[1].Color)
-	}
-	// An unmarked tab still needs a colour, and not one a marked tab has taken.
-	if tiles[2].Color == "" || tiles[2].Color == "#f7f3de" || tiles[2].Color == "#dee7f7" {
-		t.Errorf("unmarked tab got %q, want an unused palette colour", tiles[2].Color)
-	}
-}
-
-func TestRefreshFollowsAChangedMarker(t *testing.T) {
-	_, store := newTestServer(t)
-	rebuildFor(t, store, []string{"🟨 PROJECT1"}, 42)
-	// Recolouring the tab in Ghostty must win over what the tile already had.
-	tiles := rebuildFor(t, store, []string{"🟩 PROJECT1"}, 42)
-	if tiles[0].Color != "#def7e2" {
-		t.Errorf("changing the marker should recolour the tile, got %q", tiles[0].Color)
-	}
-}
-
-func TestTileTakesColourFromTheTabTitle(t *testing.T) {
-	h, store := newTestServer(t)
-	rec := post(t, h, "/api/tile", `{"tty":"/dev/ttys009","tabTitle":"🟪 RITZA","state":"idle"}`)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("%d %s", rec.Code, rec.Body)
-	}
-	tile, _ := store.FindByTTY("/dev/ttys009")
-	if tile.Color != "#e7def7" {
-		t.Errorf("got %q, want the purple the marker asks for", tile.Color)
-	}
-
-	// An explicit colour is a deliberate override and outranks the marker.
-	rec = post(t, h, "/api/tile", `{"tty":"/dev/ttys009","tabTitle":"🟪 RITZA","color":"green"}`)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("%d %s", rec.Code, rec.Body)
-	}
-	tile, _ = store.FindByTTY("/dev/ttys009")
-	if tile.Color != "#def7e2" {
-		t.Errorf("got %q, want the explicit green", tile.Color)
 	}
 }

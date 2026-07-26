@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -82,7 +81,6 @@ object Notifications {
             .setContentTitle(tile.name)
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
-            .setColor(runCatching { Color.parseColor(tile.color) }.getOrDefault(Color.WHITE))
             .setCategory(Notification.CATEGORY_STATUS)
             .setAutoCancel(true)
             .setContentIntent(focus)

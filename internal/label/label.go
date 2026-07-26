@@ -36,7 +36,7 @@ var Colors = map[rune]string{
 var Names = map[string]rune{
 	"red": '🟥', "orange": '🟧', "yellow": '🟨', "green": '🟩',
 	"blue": '🟦', "purple": '🟪', "brown": '🟫', "black": '⬛',
-	"white": '⬜', "pink": '🩷', "cyan": '💠',
+	"white": '⬜', "pink": '🩷', "cyan": '💠', "teal": '💠',
 }
 
 // Color returns the colour marked by the first recognised emoji in a title.

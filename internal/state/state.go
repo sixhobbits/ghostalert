@@ -39,7 +39,6 @@ func ValidState(s string) bool {
 type Tile struct {
 	Slot    int    `json:"slot"`
 	Name    string `json:"name"`
-	Color   string `json:"color"`
 	State   string `json:"state"`
 	Message string `json:"message"`
 
@@ -73,7 +72,6 @@ type Snapshot struct {
 type Patch struct {
 	Slot     *int    `json:"slot,omitempty"`
 	Name     *string `json:"name,omitempty"`
-	Color    *string `json:"color,omitempty"`
 	State    *string `json:"state,omitempty"`
 	Message  *string `json:"message,omitempty"`
 	TTY      *string `json:"tty,omitempty"`
@@ -271,7 +269,7 @@ func (s *Store) FreeSlot(preferred int) int {
 }
 
 // Apply merges a patch into a slot, creating the tile if needed.
-func (s *Store) Apply(slot int, p Patch, defaultColor string) (Tile, error) {
+func (s *Store) Apply(slot int, p Patch) (Tile, error) {
 	if slot < 1 {
 		return Tile{}, errors.New("slot must be >= 1")
 	}
@@ -283,14 +281,10 @@ func (s *Store) Apply(slot int, p Patch, defaultColor string) (Tile, error) {
 	t, existed := s.tiles[slot]
 	t.Slot = slot
 	if !existed {
-		t.Color = defaultColor
 		t.State = StateIdle
 	}
 	if p.Name != nil {
 		t.Name = strings.TrimSpace(*p.Name)
-	}
-	if p.Color != nil && *p.Color != "" {
-		t.Color = *p.Color
 	}
 	if p.State != nil {
 		t.State = *p.State
@@ -327,9 +321,6 @@ func (s *Store) Apply(slot int, p Patch, defaultColor string) (Tile, error) {
 	}
 	if t.Name == "" {
 		t.Name = "tab " + itoa(slot)
-	}
-	if t.Color == "" {
-		t.Color = defaultColor
 	}
 	if t.State == "" {
 		t.State = StateIdle

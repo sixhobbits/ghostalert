@@ -16,7 +16,6 @@ import (
 
 	"github.com/sixhobbits/ghostalert/internal/config"
 	"github.com/sixhobbits/ghostalert/internal/ghostty"
-	"github.com/sixhobbits/ghostalert/internal/label"
 	"github.com/sixhobbits/ghostalert/internal/state"
 )
 
@@ -145,7 +144,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 type tileRequest struct {
 	Slot     *int    `json:"slot,omitempty"`
 	Name     *string `json:"name,omitempty"`
-	Color    *string `json:"color,omitempty"`
 	State    *string `json:"state,omitempty"`
 	Message  *string `json:"message,omitempty"`
 	TTY      *string `json:"tty,omitempty"`
@@ -167,26 +165,8 @@ func (s *Server) handleTile(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	// The tab's own marker outranks the palette, but not a colour set by hand.
-	if req.Color == nil && req.TabTitle != nil {
-		if hex, ok := label.Color(*req.TabTitle); ok {
-			req.Color = &hex
-		}
-	}
-	// Normalise here rather than trusting the caller: a tile holding something
-	// that is not a colour reaches every client and renders as grey.
-	if req.Color != nil && *req.Color != "" {
-		hex, err := config.ResolveColor(*req.Color)
-		if err != nil {
-			writeErr(w, http.StatusBadRequest, err)
-			return
-		}
-		req.Color = &hex
-	}
-
 	patch := state.Patch{
 		Name:     req.Name,
-		Color:    req.Color,
 		State:    req.State,
 		Message:  req.Message,
 		TTY:      req.TTY,
@@ -195,7 +175,7 @@ func (s *Server) handleTile(w http.ResponseWriter, r *http.Request) {
 		Window:   req.Window,
 		TabIndex: req.TabIndex,
 	}
-	tile, err := s.store.Apply(slot, patch, s.cfg.ColorFor(slot))
+	tile, err := s.store.Apply(slot, patch)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -278,7 +258,7 @@ func (s *Server) handleFocus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if pid != tile.PID && pid > 0 {
-		if _, err := s.store.Apply(tile.Slot, state.Patch{PID: &pid}, tile.Color); err != nil {
+		if _, err := s.store.Apply(tile.Slot, state.Patch{PID: &pid}); err != nil {
 			s.log.Printf("update pid for slot %d: %v", tile.Slot, err)
 		}
 	}
@@ -391,21 +371,6 @@ func pickWindow(windows []ghostty.Window, n int) (ghostty.Window, error) {
 	return best, nil
 }
 
-// freeColor returns the palette colour for a slot, or the nearest one after it
-// that no other tile is already using.
-func (s *Server) freeColor(slot int, taken map[string]bool) string {
-	preferred := s.cfg.ColorFor(slot)
-	if !taken[preferred] {
-		return preferred
-	}
-	for i := range s.cfg.Palette {
-		if c := s.cfg.ColorFor(slot + i + 1); !taken[c] {
-			return c
-		}
-	}
-	return preferred
-}
-
 func (s *Server) rebuild(target ghostty.Window, start int) []state.Tile {
 	old := s.store.Tiles()
 	claimed := make([]bool, len(old))
@@ -455,18 +420,6 @@ func (s *Server) rebuild(target ghostty.Window, start int) []state.Tile {
 		}
 	}
 
-	// A tab that carries no marker still needs a colour, and two tiles the same
-	// colour are hard to tell apart, so the palette fills the gaps with whatever
-	// the marked tabs have not already claimed.
-	taken := map[string]bool{}
-	for i, title := range target.Tabs {
-		if hex, ok := label.Color(title); ok {
-			taken[hex] = true
-		} else if prev := matched[i]; prev != nil && prev.Color != "" {
-			taken[prev.Color] = true
-		}
-	}
-
 	tiles := make([]state.Tile, 0, len(target.Tabs))
 	for i, title := range target.Tabs {
 		slot := start + i
@@ -479,12 +432,6 @@ func (s *Server) rebuild(target ghostty.Window, start int) []state.Tile {
 			if prev.Name == "" || prev.Name == prev.TabTitle {
 				tile.Name = title
 			}
-		}
-		if hex, ok := label.Color(title); ok {
-			tile.Color = hex
-		} else if tile.Color == "" {
-			tile.Color = s.freeColor(slot, taken)
-			taken[tile.Color] = true
 		}
 		tile.TabTitle = title
 		tile.TabIndex = i + 1
