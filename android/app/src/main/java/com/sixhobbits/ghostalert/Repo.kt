@@ -70,25 +70,26 @@ object Repo {
     val configured: Boolean get() = host.isNotBlank() && token.isNotBlank()
 
     /**
-     * Accepts what someone would actually type or paste: a bare IP, an IP and
-     * port, or the full URL with the token fragment that `ghostalert url`
-     * prints. The token is picked up from the fragment when present.
+     * Splits what someone would actually paste into a base URL and, if it was
+     * the whole line `ghostalert url` prints, the token from its `#t=`
+     * fragment. A bare address gets the scheme and default port filled in.
      */
-    fun normaliseHost(raw: String): String {
+    fun parseAddress(raw: String): Pair<String, String> {
         var s = raw.trim()
-        if (s.isEmpty()) return ""
+        if (s.isEmpty()) return "" to ""
+        var found = ""
         val hash = s.indexOf("#t=")
         if (hash >= 0) {
-            token = s.substring(hash + 3).trim()
+            found = s.substring(hash + 3).trim()
             s = s.substring(0, hash)
         }
         if (!s.startsWith("http://") && !s.startsWith("https://")) s = "http://$s"
         s = s.trimEnd('/')
-        // Default to the daemon's port when only an address was given.
-        val afterScheme = s.substringAfter("://")
-        if (!afterScheme.contains(':')) s = "$s:7337"
-        return s
+        if (!s.substringAfter("://").contains(':')) s = "$s:7337"
+        return s to found
     }
+
+    fun normaliseHost(raw: String): String = parseAddress(raw).first
 
     fun start() {
         if (streamJob?.isActive == true) return
@@ -172,6 +173,9 @@ object Repo {
 
     private fun onSnapshot(snap: Snapshot) {
         val previous = _snapshot.value
+        // A reconnect replays the current grid, which is older than nothing but
+        // can be older than what a still-draining previous stream delivered.
+        if (previous != null && snap.rev < previous.rev) return
         _snapshot.value = snap
         Notifications.onSnapshot(appContext, previous, snap)
     }

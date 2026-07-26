@@ -266,7 +266,17 @@ private fun SettingsDialog(snapshot: Snapshot?, onClose: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = host,
-                    onValueChange = { host = it },
+                    onValueChange = { typed ->
+                        // Pasting the whole `ghostalert url` line fills in both
+                        // fields rather than silently dropping the token.
+                        val (address, pasted) = Repo.parseAddress(typed)
+                        if (pasted.isNotBlank()) {
+                            host = address
+                            token = pasted
+                        } else {
+                            host = typed
+                        }
+                    },
                     label = { Text("Host or full URL") },
                     placeholder = { Text("192.168.1.71:7337") },
                     singleLine = true,

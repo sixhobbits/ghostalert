@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 # Claude Code hook: push this tab's state to ghostalert.
 #
-#   ghostalert-claude-hook <state> [message]
+#   ghostalert-claude-hook [--bind] <state> [message]
 #
 # The state is one of idle, working, waiting, done, error. With no message, the
 # hook uses the one Claude supplies (Notification events carry the reason it is
 # asking for you) and otherwise the session's working directory.
 #
+# --bind also claims a tile for this tab. Use it on UserPromptSubmit only: that
+# event means you just typed in this tab, so it is the tab on screen, which is
+# what makes the lookup reliable. Every tab then registers itself the first time
+# you use it, with no setup.
+#
 # It always exits 0. A status tile is never worth failing a turn over.
 set -uo pipefail
+
+bind=""
+if [ "${1:-}" = "--bind" ]; then
+  bind="--bind"
+  shift
+fi
 
 state="${1:-working}"
 message="${2:-}"
@@ -27,5 +38,6 @@ if [ -z "$message" ] && [ -n "$input" ] && command -v jq >/dev/null 2>&1; then
 fi
 
 command -v ghostalert >/dev/null 2>&1 || exit 0
-ghostalert set "$state" "$message" >/dev/null 2>&1 || true
+# shellcheck disable=SC2086 # $bind is a single optional flag, not a word list
+ghostalert set $bind "$state" "$message" >/dev/null 2>&1 || true
 exit 0

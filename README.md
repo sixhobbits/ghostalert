@@ -86,8 +86,10 @@ ghostalert register --name CI   # …and relabels the tile
 ```
 
 Registration reads which tab is currently showing in that Ghostty window, so run
-it from the tab you mean. After that the tab is bound to its terminal device and
-any process in it can update the tile with no further lookups:
+it from the tab you mean — or skip it entirely and let the Claude Code hooks
+below claim each tab the first time you use it. Once bound, the tile is tied to
+the tab's terminal device and any process in it can update the tile with no
+further lookups:
 
 ```sh
 ghostalert set working "running tests"
@@ -104,9 +106,13 @@ focuses the tab.
 Copy the fragment in `hooks/claude-code/settings.example.json` into
 `~/.claude/settings.json` to get tiles that follow every session:
 
-- `UserPromptSubmit` → `working`
+- `UserPromptSubmit` → `working`, and claims a tile for the tab if it has none
 - `Notification` → `waiting`, with Claude's own reason as the message
 - `Stop` → `done`
+
+That first hook is where tabs register themselves: submitting a prompt means you
+were looking at that tab, which is exactly the condition tab lookup needs. Use
+sessions as usual and the grid fills in.
 
 `make install` puts `ghostalert-claude-hook` on your `PATH`. It exits 0 no matter
 what, so a stopped daemon never breaks a turn.

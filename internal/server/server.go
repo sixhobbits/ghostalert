@@ -99,7 +99,15 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	ch, cancel := s.store.Subscribe()
 	defer cancel()
 
+	// Snapshots can arrive out of order: a change published between subscribing
+	// and reading the initial state would otherwise land after it and roll the
+	// client back. Revisions only ever increase, so drop anything older.
+	var sentRev int64 = -1
 	send := func(snap state.Snapshot) bool {
+		if snap.Rev < sentRev {
+			return true
+		}
+		sentRev = snap.Rev
 		b, err := json.Marshal(snap)
 		if err != nil {
 			return false

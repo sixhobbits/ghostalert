@@ -50,7 +50,14 @@ class AlertService : Service() {
     companion object {
         fun start(context: Context) {
             if (!Repo.configured) return
-            ContextCompat.startForegroundService(context, Intent(context, AlertService::class.java))
+            // Android refuses foreground service starts from some background
+            // contexts. Losing the service is survivable; crashing is not.
+            runCatching {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, AlertService::class.java),
+                )
+            }
         }
 
         fun stop(context: Context) {

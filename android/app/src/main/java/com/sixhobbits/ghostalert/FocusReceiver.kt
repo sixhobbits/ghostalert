@@ -8,10 +8,12 @@ import android.content.Intent
 class FocusReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val slot = intent.getIntExtra(EXTRA_SLOT, 0)
-        if (slot > 0) {
-            Repo.init(context)
-            Repo.focus(slot)
-        }
+        if (slot <= 0) return
+        Repo.init(context)
+        // The request leaves on a background thread, so hold the broadcast open
+        // until it lands or the process may be killed mid-flight.
+        val pending = goAsync()
+        Repo.focus(slot) { pending.finish() }
     }
 
     companion object {

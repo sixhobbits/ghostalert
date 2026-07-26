@@ -35,6 +35,7 @@ Usage:
   ghostalert tabs                        list Ghostty windows and tabs
 
   ghostalert set <state> [message]       update the tile for the current tab
+  ghostalert set --bind <state>          …claiming this tab's tile if it is new
   ghostalert register [--name X]         bind the current tab to a tile
   ghostalert adopt [--window 1]          create tiles from a window's tabs
   ghostalert focus <slot|name>           raise a tab on this machine
@@ -182,6 +183,7 @@ func cmdSet(args []string) error {
 	name := fs.String("name", "", "tile name")
 	color := fs.String("color", "", "tile colour, e.g. '#dee7f7'")
 	tty := fs.String("tty", "", "terminal device (default: detected)")
+	bind := fs.Bool("bind", false, "also claim this tab's tile, as `register` does")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -209,8 +211,19 @@ func cmdSet(args []string) error {
 	if *color != "" {
 		req["color"] = *color
 	}
-	if t := pickTTY(*tty); t != "" {
+	t := pickTTY(*tty)
+	if t != "" {
 		req["tty"] = t
+	}
+	if *bind && t != "" {
+		// Cheap enough to redo on every call, and it keeps the tab's title and
+		// position fresh for a tile that was bound long ago.
+		if loc, err := ghostty.Locate(t); err == nil {
+			req["tabTitle"] = loc.TabTitle
+			req["pid"] = loc.PID
+			req["window"] = loc.WindowTitle
+			req["tabIndex"] = loc.Tab
+		}
 	}
 	var tile state.Tile
 	if err := c.Post("/api/tile", req, &tile); err != nil {
