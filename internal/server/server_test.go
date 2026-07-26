@@ -270,3 +270,51 @@ func TestRefreshKeepsACustomName(t *testing.T) {
 		t.Errorf("a name set by hand should survive a refresh, got %q", tiles[0].Name)
 	}
 }
+
+func TestRefreshTakesColourFromTheTitleMarker(t *testing.T) {
+	_, store := newTestServer(t)
+	tiles := rebuildFor(t, store, []string{"🟨 PROJECT1", "🟦 BRYNTUM", "PLAIN"}, 42)
+
+	if tiles[0].Color != "#f7f3de" {
+		t.Errorf("a yellow marker should give a yellow tile, got %q", tiles[0].Color)
+	}
+	if tiles[1].Color != "#dee7f7" {
+		t.Errorf("a blue marker should give a blue tile, got %q", tiles[1].Color)
+	}
+	// An unmarked tab still needs a colour, and not one a marked tab has taken.
+	if tiles[2].Color == "" || tiles[2].Color == "#f7f3de" || tiles[2].Color == "#dee7f7" {
+		t.Errorf("unmarked tab got %q, want an unused palette colour", tiles[2].Color)
+	}
+}
+
+func TestRefreshFollowsAChangedMarker(t *testing.T) {
+	_, store := newTestServer(t)
+	rebuildFor(t, store, []string{"🟨 PROJECT1"}, 42)
+	// Recolouring the tab in Ghostty must win over what the tile already had.
+	tiles := rebuildFor(t, store, []string{"🟩 PROJECT1"}, 42)
+	if tiles[0].Color != "#def7e2" {
+		t.Errorf("changing the marker should recolour the tile, got %q", tiles[0].Color)
+	}
+}
+
+func TestTileTakesColourFromTheTabTitle(t *testing.T) {
+	h, store := newTestServer(t)
+	rec := post(t, h, "/api/tile", `{"tty":"/dev/ttys009","tabTitle":"🟪 RITZA","state":"idle"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	tile, _ := store.FindByTTY("/dev/ttys009")
+	if tile.Color != "#e7def7" {
+		t.Errorf("got %q, want the purple the marker asks for", tile.Color)
+	}
+
+	// An explicit colour is a deliberate override and outranks the marker.
+	rec = post(t, h, "/api/tile", `{"tty":"/dev/ttys009","tabTitle":"🟪 RITZA","color":"green"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	tile, _ = store.FindByTTY("/dev/ttys009")
+	if tile.Color != "#def7e2" {
+		t.Errorf("got %q, want the explicit green", tile.Color)
+	}
+}

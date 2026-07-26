@@ -16,6 +16,7 @@ import (
 
 	"github.com/sixhobbits/ghostalert/internal/config"
 	"github.com/sixhobbits/ghostalert/internal/ghostty"
+	"github.com/sixhobbits/ghostalert/internal/label"
 	"github.com/sixhobbits/ghostalert/internal/state"
 )
 
@@ -165,6 +166,12 @@ func (s *Server) handleTile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
+	}
+	// The tab's own marker outranks the palette, but not a colour set by hand.
+	if req.Color == nil && req.TabTitle != nil {
+		if hex, ok := label.Color(*req.TabTitle); ok {
+			req.Color = &hex
+		}
 	}
 	// Normalise here rather than trusting the caller: a tile holding something
 	// that is not a colour reaches every client and renders as grey.
@@ -448,12 +455,14 @@ func (s *Server) rebuild(target ghostty.Window, start int) []state.Tile {
 		}
 	}
 
-	// Colour belongs to the tab, not to the position, so a tab that moved keeps
-	// looking like itself. Whatever is left over goes to the new tabs, which is
-	// what stops two tiles ending up the same colour.
+	// A tab that carries no marker still needs a colour, and two tiles the same
+	// colour are hard to tell apart, so the palette fills the gaps with whatever
+	// the marked tabs have not already claimed.
 	taken := map[string]bool{}
-	for i := range target.Tabs {
-		if prev := matched[i]; prev != nil && prev.Color != "" {
+	for i, title := range target.Tabs {
+		if hex, ok := label.Color(title); ok {
+			taken[hex] = true
+		} else if prev := matched[i]; prev != nil && prev.Color != "" {
 			taken[prev.Color] = true
 		}
 	}
@@ -471,7 +480,9 @@ func (s *Server) rebuild(target ghostty.Window, start int) []state.Tile {
 				tile.Name = title
 			}
 		}
-		if tile.Color == "" {
+		if hex, ok := label.Color(title); ok {
+			tile.Color = hex
+		} else if tile.Color == "" {
 			tile.Color = s.freeColor(slot, taken)
 			taken[tile.Color] = true
 		}

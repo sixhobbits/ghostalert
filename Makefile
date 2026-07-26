@@ -20,11 +20,11 @@ test:
 vet:
 	$(GO) vet ./...
 
-# Installs the daemon/CLI and the Claude Code hook helper.
+# Installs the daemon/CLI and the hook helper.
 install: build
 	install -d $(PREFIX)/bin
 	install -m 0755 ghostalert $(PREFIX)/bin/ghostalert
-	install -m 0755 hooks/claude-code/ghostalert-claude-hook $(PREFIX)/bin/ghostalert-claude-hook
+	install -m 0755 hooks/agents/ghostalert-hook $(PREFIX)/bin/ghostalert-hook
 	@echo "installed to $(PREFIX)/bin"
 
 apk:

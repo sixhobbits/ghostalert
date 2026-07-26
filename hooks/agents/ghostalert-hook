@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Push this tab's state to ghostalert. Meant to be wired to whatever lifecycle
+# events your agent, task runner or long build exposes.
+#
+#   ghostalert-hook [--bind] <state> [message]
+#
+# The state is one of idle, working, waiting, done, error. With no message, and
+# with JSON on stdin, the hook uses that object's .message, falling back to the
+# basename of its .cwd. Agents that pass no JSON can give a message directly.
+#
+# --bind also claims a tile for this tab. Use it only on an event that means
+# "the human just typed here", because it identifies the tab by which one is on
+# screen. Every tab then claims its tile the first time it is used, with no
+# setup.
+#
+# It always exits 0. A status tile is never worth failing a run over.
+set -uo pipefail
+
+bind=""
+if [ "${1:-}" = "--bind" ]; then
+  bind="--bind"
+  shift
+fi
+
+state="${1:-working}"
+message="${2:-}"
+
+input=""
+if [ ! -t 0 ]; then
+  input=$(cat)
+fi
+
+if [ -z "$message" ] && [ -n "$input" ] && command -v jq >/dev/null 2>&1; then
+  message=$(printf '%s' "$input" | jq -r '.message // empty' 2>/dev/null)
+  if [ -z "$message" ]; then
+    cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
+    [ -n "$cwd" ] && message=$(basename "$cwd")
+  fi
+fi
+
+command -v ghostalert >/dev/null 2>&1 || exit 0
+# shellcheck disable=SC2086 # $bind is a single optional flag, not a word list
+ghostalert set $bind "$state" "$message" >/dev/null 2>&1 || true
+exit 0

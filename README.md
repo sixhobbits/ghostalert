@@ -5,17 +5,18 @@ Each tile is one tab: it shows the tab's name, what the agent in it is doing,
 and a short message. Tap a tile and the Mac raises that window and switches to
 that tab.
 
-The point is a second screen for long-running terminal agents. Glance at the
-phone to see which of nine Claude Code sessions is waiting on you, tap it, and
-you are in the right tab without hunting through a tab bar.
+The point is a second screen for long-running terminal work — coding agents,
+builds, deploys, anything you start and then wait on. Glance at the phone to see
+which of nine tabs needs you, tap it, and you are there without hunting through
+a tab bar.
 
 ```
 ┌──────────────┬──────────────┐
-│ UNSILOED     │ BRYNTUM      │
+│ 🟨 PROJECT1  │ 🟦 BRYNTUM   │
 │ tests green  │ needs approv │
 │ DONE         │ WAITING ◀────┼── pulses orange, buzzes the phone
 ├──────────────┼──────────────┤
-│ SPEAKEASY    │ RITZA        │
+│ 🟩 SPEAKEASY │ 🟪 RITZA     │
 │ building     │              │
 │ WORKING      │ IDLE         │
 └──────────────┴──────────────┘
@@ -27,7 +28,7 @@ you are in the right tab without hunting through a tab bar.
 | --- | --- |
 | `ghostalert` | A single Go binary: the daemon, the CLI that pushes states, and the web UI |
 | `android/` | The phone app (Kotlin + Compose), talks to the daemon over your LAN |
-| `hooks/claude-code/` | A hook script that wires Claude Code's lifecycle to tile states |
+| `hooks/` | An agent-neutral script for reporting state from a tab |
 
 The daemon holds the grid, streams it to every client over server-sent events,
 and is the only thing that touches Ghostty. Nothing leaves your network.
@@ -82,39 +83,34 @@ point on.
 
 ## Colours
 
-Ghostty will not tell anyone what colour a tab is. It is absent from the
-accessibility tree and from disk, and reading the pixels needs Screen Recording
-permission — so a tile cannot simply be painted to match its tab.
+Ghostty has no per-tab colour setting, and will not tell anyone what colour a
+tab is: it is absent from the accessibility tree and from disk, and reading the
+pixels needs Screen Recording permission.
 
-ghostalert owns the colour instead, and pushes it the other way. Whenever it
-knows the shell behind a tile, it repaints that Ghostty surface to the tile's
-colour with the same OSC escape the rainbow-window script uses. The two agree
-because one of them is told, not guessed. Unlike the colour *query*, this is
-output only, so it is safe against a tab running anything at all.
+The usual workaround is to put a coloured square in the tab title, which shows
+up in the tab bar. ghostalert reads it:
 
-New tiles take a colour from the palette in `~/.config/ghostalert/config.json`.
-Change one and the tab follows:
+```
+🟨 PROJECT1     ->  a yellow tile named "🟨 PROJECT1"
+🟦 BRYNTUM      ->  a blue tile
+🟩🟩⚡ deploy   ->  green; the first recognised marker wins
+```
+
+Squares and circles both work, in red, orange, yellow, green, blue, purple,
+brown, black, white, pink and cyan. Only a marker at the *start* of the title
+counts, so an emoji inside a sentence stays text. Change the marker in Ghostty
+and the tile follows on the next refresh.
+
+Tabs with no marker get a palette colour from
+`~/.config/ghostalert/config.json`, chosen to avoid one a marked tab already
+uses. To override one without touching the tab title:
 
 ```sh
 ghostalert color SPEAKEASY yellow    # yellow blue red purple orange green
 ghostalert color 3 '#f7f3de'         # white black pink cyan, or any hex
 ```
 
-Pass `--no-tab-color` to leave the terminal alone, or `ghostalert color
---detect` to go the other way and adopt a tab's existing colour. Detect asks
-the terminal with an OSC 11 query, so it only works from a shell prompt in that
-tab: the answer arrives through the terminal's input, and a full-screen program
-there would swallow it. Colours stick to the tab and survive a refresh.
-
-A tab is painted the first time ghostalert learns its shell, which the
-`UserPromptSubmit` hook below does on the first prompt.
-
-Nothing watches the tab bar, so run `refresh` again after closing, renaming,
-reordering or opening tabs — or press ⟳ on the phone or in the web UI, which
-does the same thing. Tabs that are still open keep their tile, including its
-state, its colour and the shell bound to it; tiles whose tab has gone disappear,
-and everything below shifts up. A tile you renamed with `--name` keeps that
-name.
+An explicit colour outranks the marker and sticks across refreshes.
 
 To let a tab push its own status, run this **in that tab**:
 
@@ -124,10 +120,9 @@ ghostalert register --name CI   # …and relabels the tile
 ```
 
 Registration reads which tab is currently showing in that Ghostty window, so run
-it from the tab you mean — or skip it entirely and let the Claude Code hooks
-below claim each tab the first time you use it. Once bound, the tile is tied to
-the tab's terminal device and any process in it can update the tile with no
-further lookups:
+it from the tab you mean — or skip it and let the hook below claim each tab the
+first time it is used. Once bound, the tile is tied to the tab's terminal device
+and any process in it can update the tile with no further lookups:
 
 ```sh
 ghostalert set working "running tests"
@@ -139,21 +134,24 @@ States are `idle`, `working`, `waiting`, `done` and `error`. `waiting` and
 `error` pulse on the phone and raise a notification; tapping the notification
 focuses the tab.
 
-## Claude Code hooks
+## Reporting state
 
-Copy the fragment in `hooks/claude-code/settings.example.json` into
-`~/.claude/settings.json` to get tiles that follow every session:
+Tiles only show `idle` until something tells them otherwise. `ghostalert-hook`
+is the adapter, and knows nothing about any particular agent:
 
-- `UserPromptSubmit` → `working`, and claims a tile for the tab if it has none
-- `Notification` → `waiting`, with Claude's own reason as the message
-- `Stop` → `done`
+```sh
+ghostalert-hook --bind working        # started, and claim this tab's tile
+ghostalert-hook waiting "approve?"    # blocked on a human
+ghostalert-hook done
+```
 
-That first hook is where tabs register themselves: submitting a prompt means you
-were looking at that tab, which is exactly the condition tab lookup needs. Use
-sessions as usual and the grid fills in.
+`--bind` is what saves registering each tab by hand, so use it on an event that
+means the human just acted in this tab. See `hooks/` for wiring it to an agent
+with JSON hook config, to a Makefile, or to a shell function that reports on
+anything slow you run.
 
-`make install` puts `ghostalert-claude-hook` on your `PATH`. It exits 0 no matter
-what, so a stopped daemon never breaks a turn.
+`make install` puts it on your `PATH`. It always exits 0, so a stopped daemon
+cannot break the thing it is reporting on.
 
 ## The phone app
 
@@ -202,7 +200,8 @@ Two details this has to get right:
   makes a tab ignore the escape sequences programs use to rename it, so a tab
   cannot be identified by writing a marker to its terminal and reading the tab
   bar back. Those hand-set titles are stable and unique, which makes them a good
-  key instead: that is what tiles match on, falling back to tab position.
+  key instead: that is what tiles match on, falling back to tab position. It is
+  also why the title is where a tab's colour has to come from.
 
 ## Troubleshooting
 
