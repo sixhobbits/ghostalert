@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // DefaultPalette matches the tab colours used by the Ghostty "rainbow" window
@@ -108,6 +109,51 @@ func (c *Config) Save() error {
 		return err
 	}
 	return os.WriteFile(c.path, append(b, '\n'), 0o600)
+}
+
+// NamedColors lets a colour be given by name instead of a hex code, using the
+// names from the Ghostty rainbow-window script the palette comes from.
+var NamedColors = map[string]string{
+	"yellow": "#f7f3de",
+	"blue":   "#dee7f7",
+	"red":    "#f7dede",
+	"purple": "#e7def7",
+	"orange": "#f7ebde",
+	"green":  "#def7e2",
+	"white":  "#fafafa",
+	"black":  "#cccccc",
+	"grey":   "#cccccc",
+	"gray":   "#cccccc",
+	"pink":   "#f7deeb",
+	"cyan":   "#def3f7",
+}
+
+// ColorNames lists the names in palette order, for help text.
+var ColorNames = []string{
+	"yellow", "blue", "red", "purple", "orange",
+	"green", "white", "black", "pink", "cyan",
+}
+
+// ResolveColor turns a name, "#rrggbb", or bare "rrggbb" into "#rrggbb".
+func ResolveColor(s string) (string, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if hex, ok := NamedColors[s]; ok {
+		return hex, nil
+	}
+	hex := strings.TrimPrefix(s, "#")
+	if len(hex) == 3 {
+		hex = string([]byte{hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]})
+	}
+	if len(hex) != 6 {
+		return "", fmt.Errorf("%q is not a colour: use a name (%s) or a hex code like #f7f3de",
+			s, strings.Join(ColorNames, ", "))
+	}
+	for i := 0; i < len(hex); i++ {
+		if !strings.ContainsRune("0123456789abcdef", rune(hex[i])) {
+			return "", fmt.Errorf("%q is not a hex colour", s)
+		}
+	}
+	return "#" + hex, nil
 }
 
 // ColorFor returns the default colour for a slot (1-based).

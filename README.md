@@ -77,9 +77,24 @@ ghostalert grid 2 6        # 2 wide, 6 down (up to 6 x 12)
 ghostalert status
 ```
 
-`refresh` fills the tiles with your tab names and colours them from the palette
-in `~/.config/ghostalert/config.json`, whose defaults are the colours from the
-usual Ghostty rainbow-window script. Tapping a tile works from this point on.
+`refresh` fills the tiles with your tab names. Tapping a tile works from this
+point on.
+
+Colours are a guess: Ghostty keeps a tab's background to itself, so the palette
+in `~/.config/ghostalert/config.json` is handed out by position, which matches
+the usual rainbow-window script only while the tabs are in the order it made
+them. Correct a tile by name, or read the true colour from the tab itself:
+
+```sh
+ghostalert color SPEAKEASY yellow    # yellow blue red purple orange green
+ghostalert color 3 '#f7f3de'         # white black pink cyan, or any hex
+ghostalert color --detect            # run in the tab: asks the terminal
+```
+
+`--detect` is exact. It asks the terminal for its background colour with an OSC
+11 query, which only works from a shell prompt in the tab you are reading — the
+answer arrives through that terminal's input, so a full-screen program running
+there would swallow it. Colours stick to the tab and survive a refresh.
 
 Nothing watches the tab bar, so run `refresh` again after closing, renaming,
 reordering or opening tabs — or press ⟳ on the phone or in the web UI, which

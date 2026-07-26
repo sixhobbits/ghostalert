@@ -43,6 +43,8 @@ Usage:
                                          keeping state and bindings for tabs
                                          that are still open (alias: adopt)
   ghostalert focus <slot|name>           raise a tab on this machine
+  ghostalert color <slot|name> <colour>  recolour a tile (name or #hex)
+  ghostalert color --detect              …read it from the tab you are in
   ghostalert grid <cols> <rows>          resize the phone grid
   ghostalert clear [<slot>|--all]        remove tiles
   ghostalert doctor                      check the setup
@@ -72,6 +74,8 @@ func main() {
 		err = cmdRegister(args)
 	case "focus":
 		err = cmdFocus(args)
+	case "color", "colour":
+		err = cmdColor(args)
 	case "status":
 		err = cmdStatus(args)
 	case "url":
@@ -346,6 +350,84 @@ func cmdFocus(args []string) error {
 		return err
 	}
 	fmt.Printf("focused slot %d (%v)\n", slot, out["via"])
+	return nil
+}
+
+// cmdColor recolours a tile. Ghostty keeps a tab's background to itself — it is
+// absent from the accessibility tree and from disk — so the colour is either
+// named by hand or read from the terminal in that tab with --detect.
+func cmdColor(args []string) error {
+	fs := flag.NewFlagSet("color", flag.ExitOnError)
+	var cf clientFlags
+	cf.bind(fs)
+	detect := fs.Bool("detect", false, "read the real background of the terminal you run this in")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	c, err := cf.build()
+	if err != nil {
+		return err
+	}
+
+	if *detect {
+		if !ghostty.TerminalOwned() {
+			return errors.New("--detect must be run directly in the tab, at a shell prompt")
+		}
+		hex, err := ghostty.QueryBackground(600 * time.Millisecond)
+		if err != nil {
+			return err
+		}
+		tty := pickTTY("")
+		req := map[string]any{"tty": tty, "color": hex}
+		if loc, err := ghostty.Locate(tty); err == nil {
+			req["tabTitle"] = loc.TabTitle
+			req["pid"] = loc.PID
+			req["window"] = loc.WindowTitle
+			req["tabIndex"] = loc.Tab
+		}
+		var tile state.Tile
+		if err := c.Post("/api/tile", req, &tile); err != nil {
+			return err
+		}
+		fmt.Printf("slot %d  %s  %s\n", tile.Slot, tile.Color, tile.Name)
+		return nil
+	}
+
+	if fs.NArg() != 2 {
+		return fmt.Errorf("usage: ghostalert color <slot|name> <colour>\n"+
+			"colours: %s, or a hex code like #f7f3de", strings.Join(config.ColorNames, " "))
+	}
+	hex, err := config.ResolveColor(fs.Arg(1))
+	if err != nil {
+		return err
+	}
+
+	req := map[string]any{"color": hex}
+	if slot, convErr := strconv.Atoi(fs.Arg(0)); convErr == nil {
+		req["slot"] = slot
+	} else {
+		var snap state.Snapshot
+		if err := c.Get("/api/state", &snap); err != nil {
+			return err
+		}
+		found := 0
+		for _, t := range snap.Tiles {
+			if strings.EqualFold(t.Name, fs.Arg(0)) {
+				found = t.Slot
+				break
+			}
+		}
+		if found == 0 {
+			return fmt.Errorf("no tile named %q", fs.Arg(0))
+		}
+		req["slot"] = found
+	}
+
+	var tile state.Tile
+	if err := c.Post("/api/tile", req, &tile); err != nil {
+		return err
+	}
+	fmt.Printf("slot %d  %s  %s\n", tile.Slot, tile.Color, tile.Name)
 	return nil
 }
 
