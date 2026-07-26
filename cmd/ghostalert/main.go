@@ -145,8 +145,13 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
-	if *addr != "" {
+	if *addr != "" && *addr != cfg.Addr {
+		// Persist it, or `ghostalert url` and every client command would keep
+		// pointing at the old port and quietly fail to reach this daemon.
 		cfg.Addr = *addr
+		if err := cfg.Save(); err != nil {
+			return err
+		}
 	}
 
 	host, _ := os.Hostname()
