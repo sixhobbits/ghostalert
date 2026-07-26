@@ -80,21 +80,34 @@ ghostalert status
 `refresh` fills the tiles with your tab names. Tapping a tile works from this
 point on.
 
-Colours are a guess: Ghostty keeps a tab's background to itself, so the palette
-in `~/.config/ghostalert/config.json` is handed out by position, which matches
-the usual rainbow-window script only while the tabs are in the order it made
-them. Correct a tile by name, or read the true colour from the tab itself:
+## Colours
+
+Ghostty will not tell anyone what colour a tab is. It is absent from the
+accessibility tree and from disk, and reading the pixels needs Screen Recording
+permission — so a tile cannot simply be painted to match its tab.
+
+ghostalert owns the colour instead, and pushes it the other way. Whenever it
+knows the shell behind a tile, it repaints that Ghostty surface to the tile's
+colour with the same OSC escape the rainbow-window script uses. The two agree
+because one of them is told, not guessed. Unlike the colour *query*, this is
+output only, so it is safe against a tab running anything at all.
+
+New tiles take a colour from the palette in `~/.config/ghostalert/config.json`.
+Change one and the tab follows:
 
 ```sh
 ghostalert color SPEAKEASY yellow    # yellow blue red purple orange green
 ghostalert color 3 '#f7f3de'         # white black pink cyan, or any hex
-ghostalert color --detect            # run in the tab: asks the terminal
 ```
 
-`--detect` is exact. It asks the terminal for its background colour with an OSC
-11 query, which only works from a shell prompt in the tab you are reading — the
-answer arrives through that terminal's input, so a full-screen program running
+Pass `--no-tab-color` to leave the terminal alone, or `ghostalert color
+--detect` to go the other way and adopt a tab's existing colour. Detect asks
+the terminal with an OSC 11 query, so it only works from a shell prompt in that
+tab: the answer arrives through the terminal's input, and a full-screen program
 there would swallow it. Colours stick to the tab and survive a refresh.
+
+A tab is painted the first time ghostalert learns its shell, which the
+`UserPromptSubmit` hook below does on the first prompt.
 
 Nothing watches the tab bar, so run `refresh` again after closing, renaming,
 reordering or opening tabs — or press ⟳ on the phone or in the web UI, which

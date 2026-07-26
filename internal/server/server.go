@@ -166,6 +166,16 @@ func (s *Server) handleTile(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	// Normalise here rather than trusting the caller: a tile holding something
+	// that is not a colour reaches every client and renders as grey.
+	if req.Color != nil && *req.Color != "" {
+		hex, err := config.ResolveColor(*req.Color)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		req.Color = &hex
+	}
 
 	patch := state.Patch{
 		Name:     req.Name,

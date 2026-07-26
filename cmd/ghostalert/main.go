@@ -196,9 +196,10 @@ func cmdSet(args []string) error {
 	cf.bind(fs)
 	slot := fs.Int("slot", 0, "tile slot (default: the current tab's tile)")
 	name := fs.String("name", "", "tile name")
-	color := fs.String("color", "", "tile colour, e.g. '#dee7f7'")
+	color := fs.String("color", "", "tile colour: a name like blue, or #dee7f7")
 	tty := fs.String("tty", "", "terminal device (default: detected)")
 	bind := fs.Bool("bind", false, "also claim this tab's tile, as `register` does")
+	noPaint := fs.Bool("no-tab-color", false, "leave the Ghostty tab's own colour alone")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -224,7 +225,11 @@ func cmdSet(args []string) error {
 		req["name"] = *name
 	}
 	if *color != "" {
-		req["color"] = *color
+		hex, err := config.ResolveColor(*color)
+		if err != nil {
+			return err
+		}
+		req["color"] = hex
 	}
 	t := pickTTY(*tty)
 	if t != "" {
@@ -244,6 +249,7 @@ func cmdSet(args []string) error {
 	if err := c.Post("/api/tile", req, &tile); err != nil {
 		return err
 	}
+	paintTab(tile, !*noPaint)
 	fmt.Printf("slot %d  %s  %s  %s\n", tile.Slot, tile.Name, tile.State, tile.Message)
 	return nil
 }
@@ -254,9 +260,10 @@ func cmdRegister(args []string) error {
 	cf.bind(fs)
 	slot := fs.Int("slot", 0, "tile slot (default: this tab's position)")
 	name := fs.String("name", "", "tile name (default: the tab's title)")
-	color := fs.String("color", "", "tile colour, e.g. '#dee7f7'")
+	color := fs.String("color", "", "tile colour: a name like blue, or #dee7f7")
 	tty := fs.String("tty", "", "terminal device (default: detected)")
 	tabTitle := fs.String("tab", "", "Ghostty tab title (default: this tab's title)")
+	noPaint := fs.Bool("no-tab-color", false, "leave the Ghostty tab's own colour alone")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -290,7 +297,11 @@ func cmdRegister(args []string) error {
 		req["name"] = *name
 	}
 	if *color != "" {
-		req["color"] = *color
+		hex, err := config.ResolveColor(*color)
+		if err != nil {
+			return err
+		}
+		req["color"] = hex
 	}
 
 	c, err := cf.build()
@@ -301,8 +312,22 @@ func cmdRegister(args []string) error {
 	if err := c.Post("/api/tile", req, &tile); err != nil {
 		return err
 	}
+	paintTab(tile, !*noPaint)
 	fmt.Printf("slot %d = %q (tab %q, %s)\n", tile.Slot, tile.Name, tile.TabTitle, tile.TTY)
 	return nil
+}
+
+// paintTab pushes a tile's colour into the Ghostty surface behind it, so the
+// tab and the tile agree instead of the tile guessing. Nothing here can read a
+// tab's colour, so ghostalert owns it: whenever a tile's shell is known, the
+// terminal is repainted to match.
+func paintTab(tile state.Tile, enabled bool) {
+	if !enabled || tile.TTY == "" || tile.Color == "" {
+		return
+	}
+	if err := ghostty.SetColors(tile.TTY, tile.Color); err != nil {
+		fmt.Fprintf(os.Stderr, "ghostalert: could not recolour %s: %v\n", tile.TTY, err)
+	}
 }
 
 func pickTTY(explicit string) string {
@@ -361,6 +386,7 @@ func cmdColor(args []string) error {
 	var cf clientFlags
 	cf.bind(fs)
 	detect := fs.Bool("detect", false, "read the real background of the terminal you run this in")
+	noPaint := fs.Bool("no-tab-color", false, "leave the Ghostty tab's own colour alone")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -427,6 +453,7 @@ func cmdColor(args []string) error {
 	if err := c.Post("/api/tile", req, &tile); err != nil {
 		return err
 	}
+	paintTab(tile, !*noPaint)
 	fmt.Printf("slot %d  %s  %s\n", tile.Slot, tile.Color, tile.Name)
 	return nil
 }
