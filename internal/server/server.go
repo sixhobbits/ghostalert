@@ -42,7 +42,7 @@ func New(cfg *config.Config, store *state.Store, logger *log.Logger) http.Handle
 	mux.HandleFunc("POST /api/grid", s.auth(s.handleGrid))
 	mux.HandleFunc("POST /api/clear", s.auth(s.handleClear))
 	mux.HandleFunc("GET /api/tabs", s.auth(s.handleTabs))
-	mux.HandleFunc("POST /api/adopt", s.auth(s.handleAdopt))
+	mux.HandleFunc("POST /api/refresh", s.auth(s.handleRefresh))
 
 	sub, err := fs.Sub(webFS, "web")
 	if err != nil {
@@ -322,7 +322,11 @@ func (s *Server) handleTabs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, windows)
 }
 
-func (s *Server) handleAdopt(w http.ResponseWriter, r *http.Request) {
+// handleRefresh rebuilds the grid from a Ghostty window's tab bar. It is both
+// first-time setup and the answer to "I closed a tab and renamed another":
+// tabs that are still open keep their tile, including its state and the shell
+// bound to it, and tiles whose tab is gone disappear.
+func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Window    int `json:"window"`
 		StartSlot int `json:"startSlot"`
@@ -336,47 +340,142 @@ func (s *Server) handleAdopt(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	if len(windows) == 0 {
-		writeErr(w, http.StatusNotFound, errors.New("Ghostty has no open windows"))
+	target, err := pickWindow(windows, req.Window)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, err)
 		return
-	}
-	// Window numbers come from `ghostalert tabs`, which numbers every window of
-	// every Ghostty instance in one list. With no number, take the window with
-	// the most tabs: that is the one worth mirroring.
-	target := windows[0]
-	if req.Window > 0 {
-		if req.Window > len(windows) {
-			writeErr(w, http.StatusNotFound, fmt.Errorf("no Ghostty window %d (there are %d)", req.Window, len(windows)))
-			return
-		}
-		target = windows[req.Window-1]
-	} else {
-		for _, win := range windows {
-			if len(win.Tabs) > len(target.Tabs) {
-				target = win
-			}
-		}
 	}
 	start := req.StartSlot
 	if start < 1 {
 		start = 1
 	}
-	var tiles []state.Tile
-	for i, name := range target.Tabs {
-		slot := start + i
-		idx := i + 1
-		n, wt, pid := name, target.Title, target.PID
-		idle := state.StateIdle
-		tile, err := s.store.Apply(slot, state.Patch{
-			Name: &n, TabTitle: &n, State: &idle, PID: &pid, Window: &wt, TabIndex: &idx,
-		}, s.cfg.ColorFor(slot))
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
+	writeJSON(w, http.StatusOK, s.rebuild(target, start))
+}
+
+// pickWindow resolves a number from `ghostalert tabs`, which numbers every
+// window of every Ghostty instance in one list. With no number, it takes the
+// window with the most tabs: that is the one worth mirroring.
+func pickWindow(windows []ghostty.Window, n int) (ghostty.Window, error) {
+	if len(windows) == 0 {
+		return ghostty.Window{}, errors.New("Ghostty has no open windows")
+	}
+	if n > 0 {
+		if n > len(windows) {
+			return ghostty.Window{}, fmt.Errorf("no Ghostty window %d (there are %d)", n, len(windows))
 		}
+		return windows[n-1], nil
+	}
+	best := windows[0]
+	for _, win := range windows {
+		if len(win.Tabs) > len(best.Tabs) {
+			best = win
+		}
+	}
+	return best, nil
+}
+
+// freeColor returns the palette colour for a slot, or the nearest one after it
+// that no other tile is already using.
+func (s *Server) freeColor(slot int, taken map[string]bool) string {
+	preferred := s.cfg.ColorFor(slot)
+	if !taken[preferred] {
+		return preferred
+	}
+	for i := range s.cfg.Palette {
+		if c := s.cfg.ColorFor(slot + i + 1); !taken[c] {
+			return c
+		}
+	}
+	return preferred
+}
+
+func (s *Server) rebuild(target ghostty.Window, start int) []state.Tile {
+	old := s.store.Tiles()
+	claimed := make([]bool, len(old))
+	matched := make([]*state.Tile, len(target.Tabs))
+
+	// Title and position together first. Two tabs can share a title — two vim
+	// sessions on the same file, say — and matching on the title alone would
+	// let them swap states.
+	for i, title := range target.Tabs {
+		for j := range old {
+			if claimed[j] || old[j].TabTitle != title || old[j].TabIndex != i+1 {
+				continue
+			}
+			claimed[j] = true
+			matched[i] = &old[j]
+			break
+		}
+	}
+	// Then title alone, so closing a tab shifts everything else along without
+	// any tile picking up the wrong tab's state.
+	for i, title := range target.Tabs {
+		if matched[i] != nil {
+			continue
+		}
+		for j := range old {
+			if claimed[j] || old[j].TabTitle != title {
+				continue
+			}
+			claimed[j] = true
+			matched[i] = &old[j]
+			break
+		}
+	}
+	// Then position, which is what identifies a tab that was renamed: same
+	// place in the same window, no other tab claiming it.
+	for i := range target.Tabs {
+		if matched[i] != nil {
+			continue
+		}
+		for j := range old {
+			if claimed[j] || old[j].PID != target.PID || old[j].TabIndex != i+1 {
+				continue
+			}
+			claimed[j] = true
+			matched[i] = &old[j]
+			break
+		}
+	}
+
+	// Colour belongs to the tab, not to the position, so a tab that moved keeps
+	// looking like itself. Whatever is left over goes to the new tabs, which is
+	// what stops two tiles ending up the same colour.
+	taken := map[string]bool{}
+	for i := range target.Tabs {
+		if prev := matched[i]; prev != nil && prev.Color != "" {
+			taken[prev.Color] = true
+		}
+	}
+
+	tiles := make([]state.Tile, 0, len(target.Tabs))
+	for i, title := range target.Tabs {
+		slot := start + i
+		tile := state.Tile{Slot: slot, Name: title, State: state.StateIdle}
+		if prev := matched[i]; prev != nil {
+			tile = *prev
+			tile.Slot = slot
+			// A name the tile never had customised should follow the tab; one
+			// set with --name is the user's and stays put.
+			if prev.Name == "" || prev.Name == prev.TabTitle {
+				tile.Name = title
+			}
+		}
+		if tile.Color == "" {
+			tile.Color = s.freeColor(slot, taken)
+			taken[tile.Color] = true
+		}
+		tile.TabTitle = title
+		tile.TabIndex = i + 1
+		tile.PID = target.PID
+		tile.Window = target.Title
 		tiles = append(tiles, tile)
 	}
-	writeJSON(w, http.StatusOK, tiles)
+
+	if err := s.store.Replace(tiles); err != nil {
+		s.log.Printf("save after refresh: %v", err)
+	}
+	return tiles
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

@@ -69,14 +69,21 @@ it is the same grid with the same tap-to-focus behaviour.
 
 ```sh
 ghostalert tabs            # every window of every running Ghostty instance
-ghostalert adopt           # make tiles from the window with the most tabs
+ghostalert refresh         # make tiles from the window with the most tabs
 ghostalert grid 2 6        # 2 wide, 6 down (up to 6 x 12)
 ghostalert status
 ```
 
-`adopt` fills the tiles with your tab names and colours them from the palette in
-`~/.config/ghostalert/config.json`, whose defaults are the nine colours from the
+`refresh` fills the tiles with your tab names and colours them from the palette
+in `~/.config/ghostalert/config.json`, whose defaults are the colours from the
 usual Ghostty rainbow-window script. Tapping a tile works from this point on.
+
+Nothing watches the tab bar, so run `refresh` again after closing, renaming,
+reordering or opening tabs — or press ⟳ on the phone or in the web UI, which
+does the same thing. Tabs that are still open keep their tile, including its
+state, its colour and the shell bound to it; tiles whose tab has gone disappear,
+and everything below shifts up. A tile you renamed with `--name` keeps that
+name.
 
 To let a tab push its own status, run this **in that tab**:
 
@@ -177,9 +184,8 @@ try again. If it persists with the screen awake, the process running the daemon
 lacks the Accessibility grant — start it from a Ghostty tab, or add it under
 System Settings → Privacy & Security → Accessibility.
 
-**Focus lands on the wrong tab.** The tile's tab was renamed or the tab it
-remembers has moved. Re-run `ghostalert adopt`, or `ghostalert register` in the
-tab you want.
+**Focus lands on the wrong tab, or a tile is stale.** The tab bar changed since
+the tiles were built. Run `ghostalert refresh`, or press ⟳ on the phone.
 
 **The phone shows "offline".** Check that the phone is on the same network, and
 that `curl http://<mac>:7337/health` answers from another machine. macOS may
@@ -214,7 +220,7 @@ Every route under `/api` needs the token, as `X-Ghostalert-Token` or `?token=`.
 | `POST /api/grid` | `{"cols":3,"rows":8}` |
 | `POST /api/clear` | `{"slot":3}` or `{"all":true}` |
 | `GET /api/tabs` | every Ghostty window and its tabs |
-| `POST /api/adopt` | make tiles from a window's tabs |
+| `POST /api/refresh` | rebuild the tiles from a window's tabs |
 
 ## Licence
 

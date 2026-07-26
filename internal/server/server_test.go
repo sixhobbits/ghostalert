@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sixhobbits/ghostalert/internal/config"
+	"github.com/sixhobbits/ghostalert/internal/ghostty"
 	"github.com/sixhobbits/ghostalert/internal/state"
 )
 
@@ -202,5 +203,70 @@ func TestEventsStreamsSnapshots(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("change was not pushed")
+	}
+}
+
+// rebuildFor exercises the refresh logic directly: driving it through the HTTP
+// handler would need a live Ghostty.
+func rebuildFor(t *testing.T, store *state.Store, tabs []string, pid int) []state.Tile {
+	t.Helper()
+	cfg := &config.Config{Token: token, Cols: 2, Rows: 6, Palette: config.DefaultPalette}
+	s := &Server{cfg: cfg, store: store, log: log.New(io.Discard, "", 0)}
+	return s.rebuild(ghostty.Window{PID: pid, Title: "MAIN", Tabs: tabs}, 1)
+}
+
+func TestRefreshKeepsOpenTabsAndDropsClosedOnes(t *testing.T) {
+	_, store := newTestServer(t)
+	rebuildFor(t, store, []string{"UNSILOED", "BRYNTUM", "RITZA"}, 42)
+
+	// Give the middle tab some state and a bound shell.
+	waiting, msg, tty := state.StateWaiting, "approve?", "/dev/ttys009"
+	if _, err := store.Apply(2, state.Patch{State: &waiting, Message: &msg, TTY: &tty}, "#fff"); err != nil {
+		t.Fatal(err)
+	}
+
+	// UNSILOED is closed, so BRYNTUM and RITZA shift up a slot.
+	tiles := rebuildFor(t, store, []string{"BRYNTUM", "RITZA"}, 42)
+	if len(tiles) != 2 {
+		t.Fatalf("want 2 tiles, got %d", len(tiles))
+	}
+	if tiles[0].Name != "BRYNTUM" || tiles[0].Slot != 1 {
+		t.Fatalf("BRYNTUM should have moved to slot 1: %+v", tiles[0])
+	}
+	if tiles[0].State != state.StateWaiting || tiles[0].Message != "approve?" || tiles[0].TTY != tty {
+		t.Errorf("a tab that is still open should keep its state and shell: %+v", tiles[0])
+	}
+	if _, ok := store.Get(3); ok {
+		t.Error("the closed tab's tile should be gone")
+	}
+}
+
+func TestRefreshFollowsARename(t *testing.T) {
+	_, store := newTestServer(t)
+	rebuildFor(t, store, []string{"UNSILOED", "BRYNTUM"}, 42)
+	tty := "/dev/ttys009"
+	if _, err := store.Apply(2, state.Patch{TTY: &tty}, "#fff"); err != nil {
+		t.Fatal(err)
+	}
+
+	tiles := rebuildFor(t, store, []string{"UNSILOED", "SCHEDULER"}, 42)
+	if tiles[1].Name != "SCHEDULER" || tiles[1].TabTitle != "SCHEDULER" {
+		t.Errorf("the tile should have picked up the new title: %+v", tiles[1])
+	}
+	if tiles[1].TTY != tty {
+		t.Errorf("a rename should not break the shell binding: %+v", tiles[1])
+	}
+}
+
+func TestRefreshKeepsACustomName(t *testing.T) {
+	_, store := newTestServer(t)
+	rebuildFor(t, store, []string{"UNSILOED"}, 42)
+	custom := "CI box"
+	if _, err := store.Apply(1, state.Patch{Name: &custom}, "#fff"); err != nil {
+		t.Fatal(err)
+	}
+	tiles := rebuildFor(t, store, []string{"UNSILOED"}, 42)
+	if tiles[0].Name != custom {
+		t.Errorf("a name set by hand should survive a refresh, got %q", tiles[0].Name)
 	}
 }

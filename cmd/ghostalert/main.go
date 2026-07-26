@@ -39,7 +39,9 @@ Usage:
   ghostalert set <state> [message]       update the tile for the current tab
   ghostalert set --bind <state>          …claiming this tab's tile if it is new
   ghostalert register [--name X]         bind the current tab to a tile
-  ghostalert adopt [--window 1]          create tiles from a window's tabs
+  ghostalert refresh [--window 1]        rebuild the tiles from a window's tabs,
+                                         keeping state and bindings for tabs
+                                         that are still open (alias: adopt)
   ghostalert focus <slot|name>           raise a tab on this machine
   ghostalert grid <cols> <rows>          resize the phone grid
   ghostalert clear [<slot>|--all]        remove tiles
@@ -82,8 +84,8 @@ func main() {
 		err = cmdClear(args)
 	case "tabs":
 		err = cmdTabs(args)
-	case "adopt":
-		err = cmdAdopt(args)
+	case "adopt", "refresh":
+		err = cmdRefresh(args)
 	case "doctor":
 		err = cmdDoctor(args)
 	case "version", "--version", "-v":
@@ -506,8 +508,8 @@ func cmdTabs(args []string) error {
 	return nil
 }
 
-func cmdAdopt(args []string) error {
-	fs := flag.NewFlagSet("adopt", flag.ExitOnError)
+func cmdRefresh(args []string) error {
+	fs := flag.NewFlagSet("refresh", flag.ExitOnError)
 	var cf clientFlags
 	cf.bind(fs)
 	window := fs.Int("window", 0, "window number from `ghostalert tabs` (default: the one with the most tabs)")
@@ -520,11 +522,11 @@ func cmdAdopt(args []string) error {
 		return err
 	}
 	var tiles []state.Tile
-	if err := c.Post("/api/adopt", map[string]any{"window": *window, "startSlot": *start}, &tiles); err != nil {
+	if err := c.Post("/api/refresh", map[string]any{"window": *window, "startSlot": *start}, &tiles); err != nil {
 		return err
 	}
 	for _, t := range tiles {
-		fmt.Printf("slot %d  %s  %s\n", t.Slot, t.Color, t.Name)
+		fmt.Printf("slot %d  %s  %-7s %s\n", t.Slot, t.Color, t.State, t.Name)
 	}
 	return nil
 }

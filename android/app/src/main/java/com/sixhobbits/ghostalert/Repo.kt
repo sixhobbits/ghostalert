@@ -190,6 +190,14 @@ object Repo {
         }
     }
 
+    /** Re-read the Mac's tab bar, picking up closed, renamed and new tabs. */
+    fun refresh(onResult: (Result<Unit>) -> Unit = {}) {
+        scope.launch {
+            val result = runCatching { post("/api/refresh", JSONObject()) }
+            withContext(Dispatchers.Main) { onResult(result.map { }) }
+        }
+    }
+
     /** Change the grid the daemon serves to every client. */
     fun setGrid(cols: Int, rows: Int, onResult: (Result<Unit>) -> Unit = {}) {
         scope.launch {

@@ -341,6 +341,41 @@ func (s *Store) Apply(slot int, p Patch, defaultColor string) (Tile, error) {
 	return t, err
 }
 
+// Tiles returns every tile that exists, in slot order.
+func (s *Store) Tiles() []Tile {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Tile, 0, len(s.tiles))
+	for _, t := range s.tiles {
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Slot < out[j].Slot })
+	return out
+}
+
+// Replace swaps the whole tile set atomically, so a rebuild is never visible
+// half-applied to a client watching the stream.
+func (s *Store) Replace(tiles []Tile) error {
+	now := time.Now()
+	s.mu.Lock()
+	s.tiles = make(map[int]Tile, len(tiles))
+	for _, t := range tiles {
+		if t.Slot < 1 {
+			continue
+		}
+		if t.UpdatedAt.IsZero() {
+			t.UpdatedAt = now
+		}
+		s.tiles[t.Slot] = t
+	}
+	s.rev++
+	snap := s.snapshotLocked()
+	err := s.saveLocked()
+	s.mu.Unlock()
+	s.publish(snap)
+	return err
+}
+
 // Clear removes a tile.
 func (s *Store) Clear(slot int) error {
 	s.mu.Lock()

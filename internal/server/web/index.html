@@ -75,12 +75,13 @@
   #setup { display: none; flex-direction: column; gap: 8px; max-width: 420px; }
   input { padding: 10px; border-radius: 8px; border: 1px solid #333; background: #17171d; color: var(--fg); font: inherit; }
   button.go { padding: 10px; border-radius: 8px; border: 0; background: #3b7; color: #04120a; font-weight: 700; }
+  #refresh { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; padding: 0 4px; }
 </style>
 </head>
 <body>
 <header>
   <span><span id="dot"></span><span id="status">connecting…</span></span>
-  <span id="host"></span>
+  <span><span id="host"></span> <button id="refresh" title="Re-read the tab bar">⟳</button></span>
 </header>
 <div id="setup">
   <p>Enter the access token printed by <code>ghostalert url</code>.</p>
@@ -121,6 +122,12 @@
       body: JSON.stringify(body)
     });
   }
+
+  document.getElementById('refresh').onclick = function () {
+    post('/api/refresh', {}).then(function (r) {
+      if (!r.ok) r.json().then(function (e) { statusEl.textContent = e.error || 'refresh failed'; });
+    });
+  };
 
   function render(snap) {
     hostEl.textContent = snap.host || '';

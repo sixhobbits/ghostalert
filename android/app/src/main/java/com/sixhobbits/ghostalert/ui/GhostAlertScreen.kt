@@ -59,6 +59,7 @@ fun GhostAlertScreen() {
         val link by Repo.link.collectAsStateWithLifecycle()
         val error by Repo.lastError.collectAsStateWithLifecycle()
         var showSettings by remember { mutableStateOf(!Repo.configured) }
+        val context = LocalContext.current
 
         Column(
             Modifier
@@ -72,6 +73,14 @@ fun GhostAlertScreen() {
                 link = link,
                 snapshot = snapshot,
                 error = error,
+                onRefresh = {
+                    Repo.refresh { result ->
+                        result.onFailure {
+                            Toast.makeText(context, it.message ?: "refresh failed", Toast.LENGTH_SHORT)
+                                .show()
+                        }
+                    }
+                },
                 onSettings = { showSettings = true },
             )
             if (snapshot == null) {
@@ -98,6 +107,7 @@ private fun StatusBar(
     link: Link,
     snapshot: Snapshot?,
     error: String?,
+    onRefresh: () -> Unit,
     onSettings: () -> Unit,
 ) {
     Row(
@@ -132,7 +142,10 @@ private fun StatusBar(
                 modifier = Modifier.weight(1f, fill = false),
             )
         }
-        TextButton(onClick = onSettings) { Text("⚙", color = Muted, fontSize = 18.sp) }
+        Row {
+            TextButton(onClick = onRefresh) { Text("⟳", color = Muted, fontSize = 20.sp) }
+            TextButton(onClick = onSettings) { Text("⚙", color = Muted, fontSize = 18.sp) }
+        }
     }
 }
 
