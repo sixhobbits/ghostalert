@@ -77,6 +77,8 @@ object Repo {
     fun parseAddress(raw: String): Pair<String, String> {
         var s = raw.trim()
         if (s.isEmpty()) return "" to ""
+        // A ghostalert:// link carries the same thing the web URL does.
+        if (s.startsWith("ghostalert://")) s = "http://" + s.removePrefix("ghostalert://")
         var found = ""
         val hash = s.indexOf("#t=")
         if (hash >= 0) {

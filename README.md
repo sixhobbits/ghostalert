@@ -124,14 +124,24 @@ make apk                 # android/app/build/outputs/apk/release/app-release.apk
 make install-apk         # …and adb install it
 ```
 
+Tested on a OnePlus 5T running LineageOS 22.2 (Android 15).
+
 Building needs JDK 17 and an Android SDK with `platforms;android-35` and
 `build-tools;35.0.0`; override `JAVA_HOME_17` and `ANDROID_SDK` if yours live
 elsewhere. The release APK is signed with the debug key so it sideloads without
 any keystore setup.
 
-On first launch, tap the gear and paste the `web:` URL from `ghostalert url` —
-the app pulls the token out of the `#t=` fragment. The grid size is whatever the
-daemon serves and can be changed from the same dialog.
+With the phone on USB, set it up without touching the screen:
+
+```sh
+ghostalert pair          # sends this machine's address and token to the app
+```
+
+Otherwise tap the gear and paste the `web:` URL from `ghostalert url` — the app
+pulls the token out of the `#t=` fragment, so there is no need to type it
+separately. A `ghostalert://192.168.1.71:7337#t=token` link does the same thing
+from a QR code or a message. The grid size is whatever the daemon serves and can
+be changed from the same dialog.
 
 The app runs a foreground service so tiles keep updating and alerts still arrive
 with the app in the background. It reconnects on its own after the network drops

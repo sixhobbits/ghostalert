@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -31,6 +32,7 @@ const usage = `ghostalert - mirror Ghostty tabs onto your phone as tappable tile
 Usage:
   ghostalert serve [--addr :7337]        run the daemon (also serves the web UI)
   ghostalert url                         print the URL and token to pair a phone
+  ghostalert pair                        push those to a USB-attached phone
   ghostalert status                      print the tile grid
   ghostalert tabs                        list Ghostty windows and tabs
 
@@ -72,6 +74,8 @@ func main() {
 		err = cmdStatus(args)
 	case "url":
 		err = cmdURL(args)
+	case "pair":
+		err = cmdPair(args)
 	case "grid":
 		err = cmdGrid(args)
 	case "clear":
@@ -381,6 +385,46 @@ func cmdURL(args []string) error {
 	fmt.Printf("host:  %s\n", base)
 	fmt.Printf("token: %s\n", cfg.Token)
 	fmt.Printf("web:   %s/#t=%s\n", base, cfg.Token)
+	return nil
+}
+
+// cmdPair configures the phone app over adb, because typing a token on a phone
+// keyboard is miserable and getting one character wrong just says "offline".
+func cmdPair(args []string) error {
+	fs := flag.NewFlagSet("pair", flag.ExitOnError)
+	device := fs.String("s", "", "adb device serial, when more than one is attached")
+	host := fs.String("host", "", "address the phone should use (default: this machine's LAN address)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	base := *host
+	if base == "" {
+		base = server.LANAddr(cfg.Addr)
+	}
+	url := fmt.Sprintf("%s/#t=%s", base, cfg.Token)
+
+	adb := []string{}
+	if *device != "" {
+		adb = append(adb, "-s", *device)
+	}
+	adb = append(adb,
+		"shell", "am", "start",
+		"-n", "com.sixhobbits.ghostalert/.MainActivity",
+		"-e", "url", url,
+	)
+	cmd := exec.Command("adb", adb...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("adb: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+	if strings.Contains(string(out), "Error") {
+		return fmt.Errorf("adb: %s", strings.TrimSpace(string(out)))
+	}
+	fmt.Printf("paired phone with %s\n", url)
 	return nil
 }
 
