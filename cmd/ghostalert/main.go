@@ -447,7 +447,7 @@ func cmdMark(args []string) error {
 	}
 
 	newTitle := marker + " " + label.Text(tile.TabTitle)
-	if err := ghostty.SetTabTitle(tile.TabTitle, newTitle); err != nil {
+	if err := ghostty.Rename(tile.PID, tile.TabTitle, newTitle); err != nil {
 		return err
 	}
 

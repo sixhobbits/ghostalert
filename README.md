@@ -109,8 +109,8 @@ ghostalert mark 3 🟨           # or paste the emoji
 ```
 
 Ghostty treats a title set this way as an override, so nothing running in the
-tab can paint over it. This goes through Ghostty's scripting interface, which
-only answers for one instance — see below.
+tab can paint over it. It uses Ghostty's scripting interface where that reaches
+the tab, and drives the menu otherwise — see below.
 
 Tabs with no marker get a palette colour from
 `~/.config/ghostalert/config.json`, chosen to avoid one a marked tab already
@@ -209,6 +209,16 @@ fallback is the accessibility API, where Ghostty publishes its tab bar as a
 group of radio buttons, one per tab, each named after the tab. Clicking one
 switches tab, and unlike ⌘1…⌘9 it reaches a tenth tab and does not care which
 window is frontmost.
+
+Renaming a tab there takes a third route. The tab bar is read-only to
+accessibility — `AXTitle` reports `settable=false` and writing it is silently
+ignored — and Ghostty draws the "Change Tab Title" prompt inside its GPU
+surface, so it adds nothing to the accessibility tree to type into. What works
+is driving the menu: select the tab, open the prompt, and paste through the
+Edit menu. Typing is no good because System Events drops anything outside the
+basic multilingual plane, which is every coloured square, and the prompt
+ignores ⌘V. The clipboard is saved and put back, and the result is confirmed by
+reading the tab bar, since nothing can inspect the prompt itself.
 
 Two details this has to get right:
 
