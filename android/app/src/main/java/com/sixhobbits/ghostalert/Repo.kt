@@ -175,9 +175,6 @@ object Repo {
 
     private fun onSnapshot(snap: Snapshot) {
         val previous = _snapshot.value
-        // A reconnect replays the current grid, which is older than nothing but
-        // can be older than what a still-draining previous stream delivered.
-        if (previous != null && snap.rev < previous.rev) return
         _snapshot.value = snap
         Notifications.onSnapshot(appContext, previous, snap)
     }

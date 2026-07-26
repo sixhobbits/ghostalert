@@ -86,6 +86,7 @@ type Patch struct {
 type persisted struct {
 	Cols  int    `json:"cols"`
 	Rows  int    `json:"rows"`
+	Rev   int64  `json:"rev"`
 	Tiles []Tile `json:"tiles"`
 }
 
@@ -128,6 +129,9 @@ func New(path, host string, cols, rows int) (*Store, error) {
 	if p.Rows > 0 {
 		s.rows = p.Rows
 	}
+	// Revisions carry across restarts. A client that reconnects after one would
+	// otherwise be holding a higher number than the daemon it is talking to.
+	s.rev = p.Rev
 	for _, t := range p.Tiles {
 		if t.Slot > 0 {
 			s.tiles[t.Slot] = t
@@ -404,7 +408,7 @@ func (s *Store) saveLocked() error {
 	if s.path == "" {
 		return nil
 	}
-	p := persisted{Cols: s.cols, Rows: s.rows}
+	p := persisted{Cols: s.cols, Rows: s.rows, Rev: s.rev}
 	for _, t := range s.tiles {
 		p.Tiles = append(p.Tiles, t)
 	}

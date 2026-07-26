@@ -184,3 +184,27 @@ func TestSubscribeReceivesUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRevisionSurvivesARestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	s, err := New(path, "h", 2, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := s.Apply(1, Patch{Name: str("A")}, "#fff"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := s.Snapshot().Rev
+
+	// A restart that reset the revision would make every connected client
+	// discard the daemon's state as older than what it already had.
+	reloaded, err := New(path, "h", 2, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reloaded.Snapshot().Rev; got != before {
+		t.Errorf("revision after restart = %d, want %d", got, before)
+	}
+}
