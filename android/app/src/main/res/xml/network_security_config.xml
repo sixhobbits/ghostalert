@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The daemon runs on your own machine on your own LAN and speaks plain HTTP,
+  reached by IP address. Android's rules match host names, not address ranges,
+  so there is no way to scope this to private IPs; cleartext is allowed
+  outright. Every request carries the shared token from `ghostalert url`.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>ghostalert</title>
+<style>
+  :root {
+    --bg: #101014;
+    --fg: #e9e9ee;
+    --muted: #8a8a96;
+    --gap: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    padding: var(--gap);
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: #d14; display: inline-block; margin-right: 6px; }
+  #dot.up { background: #2c9; }
+  #grid {
+    flex: 1;
+    display: grid;
+    gap: var(--gap);
+    min-height: 0;
+  }
+  .tile {
+    border-radius: 14px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+    color: #14141a;
+    border: 2px solid transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    text-align: left;
+    font: inherit;
+  }
+  .tile:active { transform: scale(0.98); }
+  .tile.empty { background: #1a1a20; color: #4a4a56; border-style: dashed; border-color: #2a2a34; cursor: default; }
+  .tile .name { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .msg { font-size: 13px; opacity: .8; overflow: hidden; }
+  .tile .badge {
+    margin-top: auto;
+    align-self: flex-start;
+    font-size: 11px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(0,0,0,.13);
+  }
+  .tile.waiting { border-color: #ff9500; animation: pulse 1.1s ease-in-out infinite; }
+  .tile.error { border-color: #ff3b30; }
+  .tile.working { border-color: rgba(0,0,0,.25); }
+  .tile.done { border-color: #34c759; }
+  @keyframes pulse { 50% { border-color: rgba(255,149,0,.25); } }
+  #setup { display: none; flex-direction: column; gap: 8px; max-width: 420px; }
+  input { padding: 10px; border-radius: 8px; border: 1px solid #333; background: #17171d; color: var(--fg); font: inherit; }
+  button.go { padding: 10px; border-radius: 8px; border: 0; background: #3b7; color: #04120a; font-weight: 700; }
+</style>
+</head>
+<body>
+<header>
+  <span><span id="dot"></span><span id="status">connecting…</span></span>
+  <span id="host"></span>
+</header>
+<div id="setup">
+  <p>Enter the access token printed by <code>ghostalert url</code>.</p>
+  <input id="token-input" placeholder="token" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button class="go" id="token-save">Connect</button>
+</div>
+<div id="grid"></div>
+<script>
+(function () {
+  var grid = document.getElementById('grid');
+  var dot = document.getElementById('dot');
+  var statusEl = document.getElementById('status');
+  var hostEl = document.getElementById('host');
+  var setup = document.getElementById('setup');
+
+  var hashToken = (location.hash.match(/t=([a-z0-9]+)/i) || [])[1];
+  if (hashToken) {
+    localStorage.setItem('ghostalert.token', hashToken);
+    history.replaceState(null, '', location.pathname);
+  }
+  var token = localStorage.getItem('ghostalert.token') || '';
+
+  document.getElementById('token-save').onclick = function () {
+    localStorage.setItem('ghostalert.token', document.getElementById('token-input').value.trim());
+    location.reload();
+  };
+
+  function askForToken() {
+    setup.style.display = 'flex';
+    grid.style.display = 'none';
+    statusEl.textContent = 'token required';
+  }
+
+  function post(path, body) {
+    return fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Ghostalert-Token': token },
+      body: JSON.stringify(body)
+    });
+  }
+
+  function render(snap) {
+    hostEl.textContent = snap.host || '';
+    grid.style.gridTemplateColumns = 'repeat(' + snap.cols + ', 1fr)';
+    grid.style.gridTemplateRows = 'repeat(' + snap.rows + ', 1fr)';
+    grid.innerHTML = '';
+    snap.tiles.slice(0, snap.cols * snap.rows).forEach(function (t) {
+      var el = document.createElement('button');
+      el.className = 'tile ' + t.state;
+      if (t.state === 'empty') {
+        el.classList.add('empty');
+        el.innerHTML = '<div class="name">' + t.slot + '</div>';
+        grid.appendChild(el);
+        return;
+      }
+      el.style.background = t.color || '#ddd';
+      el.innerHTML =
+        '<div class="name"></div><div class="msg"></div><div class="badge"></div>';
+      el.querySelector('.name').textContent = t.name;
+      el.querySelector('.msg').textContent = t.message || '';
+      el.querySelector('.badge').textContent = t.state;
+      el.onclick = function () { post('/api/focus', { slot: t.slot }); };
+      grid.appendChild(el);
+    });
+  }
+
+  function connect() {
+    if (!token) { askForToken(); return; }
+    var es = new EventSource('/api/events?token=' + encodeURIComponent(token));
+    es.onopen = function () {
+      dot.className = 'up';
+      statusEl.textContent = 'live';
+      setup.style.display = 'none';
+      grid.style.display = 'grid';
+    };
+    es.addEventListener('state', function (e) { render(JSON.parse(e.data)); });
+    es.onerror = function () {
+      dot.className = '';
+      statusEl.textContent = 'reconnecting…';
+      // EventSource retries on its own; a 401 will loop, so verify the token.
+      fetch('/api/state?token=' + encodeURIComponent(token)).then(function (r) {
+        if (r.status === 401) { es.close(); askForToken(); }
+      });
+    };
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

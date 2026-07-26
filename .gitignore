@@ -1,0 +1,14 @@
+# Go
+/ghostalert
+/dist/
+
+# Android
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+*.iml
+
+# macOS
+.DS_Store

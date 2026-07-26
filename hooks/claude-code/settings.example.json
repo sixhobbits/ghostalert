@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "ghostalert-claude-hook working" }] }
+    ],
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "ghostalert-claude-hook waiting" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "ghostalert-claude-hook done" }] }
+    ],
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "ghostalert-claude-hook idle" }] }
+    ]
+  }
+}

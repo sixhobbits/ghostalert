@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ghostalert</string>
+    <string name="channel_status_name">Agent status</string>
+    <string name="channel_status_desc">Fires when a tab needs your attention.</string>
+    <string name="channel_service_name">Connection</string>
+    <string name="channel_service_desc">Keeps the link to your Mac open.</string>
+</resources>
