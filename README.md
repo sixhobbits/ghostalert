@@ -62,8 +62,11 @@ ghostalert url
 # web:   http://192.168.1.71:7337/#t=yb2x5dchsxge
 ```
 
-Open the `web:` URL in any browser to check it works before touching the phone —
-it is the same grid with the same tap-to-focus behaviour.
+Open the `web:` URL in any browser, on the Mac or on a phone. It is the same
+grid with the same tap-to-focus behaviour, so the Android app is optional: use
+it for notifications when a tab starts waiting, and the browser for everything
+else. Chrome only offers a real installed-app experience over HTTPS, so on a
+plain LAN address "Add to Home Screen" gives a shortcut that opens in a tab.
 
 ## Set up the grid
 
