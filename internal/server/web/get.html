@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>ghostalert — install</title>
+<style>
+  body { background:#101014; color:#e9e9ee; font:16px/1.5 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+         margin:0; padding:24px; max-width:34rem; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p { color:#8a8a96; font-size:14px; }
+  a.btn { display:block; margin:16px 0; padding:14px 16px; border-radius:12px; text-decoration:none;
+          font-weight:700; text-align:center; }
+  .dl { background:#2f6fed; color:#fff; }
+  .pair { background:#2aa84a; color:#fff; }
+  .off { background:#23232b; color:#8a8a96; }
+  code { background:#1a1a20; padding:2px 6px; border-radius:6px; font-size:13px; }
+</style>
+</head>
+<body>
+<h1>ghostalert</h1>
+<p id="host"></p>
+<a class="btn dl" href="app.apk" download>Download the app</a>
+<p>Android will ask you to allow installing from the browser. The app is signed
+with a debug key, so it installs without any store.</p>
+<a class="btn off" id="pair" href="#">Pair this phone</a>
+<p id="pairnote">Open this page from the link <code>ghostalert url</code> prints,
+and this button fills in the address and token for you.</p>
+<script>
+  var token = (location.search.match(/token=([a-z0-9]+)/i) || [])[1];
+  document.getElementById('host').textContent = location.host;
+  if (token) {
+    var a = document.getElementById('pair');
+    a.href = 'ghostalert://' + location.host + '#t=' + token;
+    a.className = 'btn pair';
+    document.getElementById('pairnote').textContent =
+      'Install first, then tap this to point the app at this machine.';
+  }
+</script>
+</body>
+</html>

@@ -163,6 +163,11 @@ With the phone on USB, set it up without touching the screen:
 ghostalert pair          # sends this machine's address and token to the app
 ```
 
+Without a cable, open the `app:` line from `ghostalert url` in the phone's
+browser. That page serves the APK the daemon has on hand and, because the link
+carries the token, a second tap points the freshly installed app at this
+machine. `make apk` puts the built APK where the daemon can find it.
+
 Otherwise tap the gear and paste the `web:` URL from `ghostalert url` — the app
 pulls the token out of the `#t=` fragment, so there is no need to type it
 separately. A `ghostalert://192.168.1.71:7337#t=token` link does the same thing

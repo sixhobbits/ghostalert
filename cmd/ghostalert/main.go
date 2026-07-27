@@ -464,6 +464,7 @@ func cmdURL(args []string) error {
 	fmt.Printf("host:  %s\n", base)
 	fmt.Printf("token: %s\n", cfg.Token)
 	fmt.Printf("web:   %s/#t=%s\n", base, cfg.Token)
+	fmt.Printf("app:   %s/get.html?token=%s\n", base, cfg.Token)
 	return nil
 }
 

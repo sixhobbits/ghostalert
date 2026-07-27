@@ -6,6 +6,7 @@ LDFLAGS  := -X main.version=$(VERSION)
 JAVA_HOME_17 ?= /opt/homebrew/opt/openjdk@17
 ANDROID_SDK  ?= $(HOME)/Android/sdk
 APK          := android/app/build/outputs/apk/release/app-release.apk
+GHOSTALERT_HOME ?= $(HOME)/.config/ghostalert
 
 .PHONY: all build test vet install apk install-apk clean
 
@@ -30,7 +31,9 @@ install: build
 apk:
 	@echo "sdk.dir=$(ANDROID_SDK)" > android/local.properties
 	cd android && JAVA_HOME=$(JAVA_HOME_17) ANDROID_HOME=$(ANDROID_SDK) ./gradlew assembleRelease
-	@echo "built $(APK)"
+	@mkdir -p $(GHOSTALERT_HOME)
+	@cp $(APK) $(GHOSTALERT_HOME)/app.apk
+	@echo "built $(APK), served at /app.apk"
 
 install-apk: apk
 	adb install -r $(APK)

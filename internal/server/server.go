@@ -10,6 +10,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +45,10 @@ func New(cfg *config.Config, store *state.Store, logger *log.Logger) http.Handle
 	mux.HandleFunc("POST /api/clear", s.auth(s.handleClear))
 	mux.HandleFunc("GET /api/tabs", s.auth(s.handleTabs))
 	mux.HandleFunc("POST /api/refresh", s.auth(s.handleRefresh))
+	// Unauthenticated on purpose: this is how a phone with nothing installed
+	// gets the app. It hands out the APK, not the grid, and the pairing link is
+	// only filled in when the page is opened with the token already in the URL.
+	mux.HandleFunc("GET /app.apk", s.handleAPK)
 
 	sub, err := fs.Sub(webFS, "web")
 	if err != nil {
@@ -73,6 +79,26 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+// handleAPK serves the built Android app so a new phone can install it over the
+// network instead of needing a cable.
+func (s *Server) handleAPK(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Join(config.Dir(), "app.apk")
+	f, err := os.Open(path)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, errors.New("no app.apk here yet: run `make apk` on this machine"))
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/vnd.android.package-archive")
+	w.Header().Set("Content-Disposition", `attachment; filename="ghostalert.apk"`)
+	http.ServeContent(w, r, "ghostalert.apk", info.ModTime(), f)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
